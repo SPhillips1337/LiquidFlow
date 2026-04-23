@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>LiquidFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Library shelf / book picker -->
+    <div id="shelf" class="view active">
+      <header class="shelf-header">
+        <span class="logo">⟡ LiquidFlow</span>
+        <span class="tagline">animated ebooks</span>
+      </header>
+      <div id="book-grid" class="book-grid"></div>
+    </div>
+
+    <!-- Reader view -->
+    <div id="reader-view" class="view">
+      <nav class="reader-nav">
+        <button id="btn-back" aria-label="Back to library">← library</button>
+        <span id="book-title-nav"></span>
+        <div class="nav-right">
+          <button id="btn-ascii" title="Toggle ASCII art">⌘</button>
+          <button id="btn-settings" title="Settings">⚙</button>
+        </div>
+      </nav>
+
+      <!-- Main canvas for pretext rendering -->
+      <canvas id="reader-canvas" aria-label="Book content"></canvas>
+
+      <!-- ASCII art overlay panel -->
+      <div id="ascii-panel" class="ascii-panel hidden" aria-live="polite"></div>
+
+      <!-- Marginalia / lore card -->
+      <div id="marginalia" class="marginalia hidden" role="complementary" aria-label="Lore card">
+        <button id="marginalia-close" aria-label="Close lore card">✕</button>
+        <div id="marginalia-content"></div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+
+      <!-- Chapter / scene info -->
+      <div id="scene-info" class="scene-info"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

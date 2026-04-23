@@ -1,0 +1,11 @@
+{
+  "name": "liquidflow",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["reader", "pipeline"],
+  "scripts": {
+    "dev":    "npm run dev    --workspace=reader",
+    "build":  "npm run build  --workspace=reader",
+    "ingest": "npm run ingest --workspace=pipeline --"
+  }
+}
