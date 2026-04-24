@@ -407,9 +407,36 @@ function drawLines(
       ctx.fillText(line.text, line.x + line.w / 2, screenY + config.lineHeight * 0.8)
       ctx.textAlign = 'left'
     } else {
+      // Check for dialogue and apply bold styling
+      const lineText = line.text
+      const hasSpeech = /"[^"]+"|'[^']+'/.test(lineText)
+      
       ctx.font = config.font
       ctx.fillStyle = config.colors.text
-      ctx.fillText(line.text, line.x, screenY + config.lineHeight * 0.8)
+      
+      if (hasSpeech) {
+        // Draw quoted sections in bold accent color
+        const parts = lineText.split(/(["'])(.*?)\1/g)
+        let xPos = line.x
+        
+        for (const part of parts) {
+          if (part.startsWith('"') || part.startsWith("'")) {
+            ctx.font = `bold ${config.fontSize}px Lora, Georgia, serif`
+            ctx.fillStyle = config.colors.accent
+          } else if (part === '"' || part === "'") {
+            // Skip lone quotes, continue with normal
+            xPos += ctx.measureText(part).width
+            continue
+          } else {
+            ctx.font = config.font
+            ctx.fillStyle = config.colors.text
+          }
+          ctx.fillText(part, xPos, screenY + config.lineHeight * 0.8)
+          xPos += ctx.measureText(part).width
+        }
+      } else {
+        ctx.fillText(lineText, line.x, screenY + config.lineHeight * 0.8)
+      }
     }
 
     charOffset += line.text.length + 1

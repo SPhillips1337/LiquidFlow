@@ -372,6 +372,10 @@ function handleInput(e: InputEvent) {
       break
     case 'scroll':
       position.scrollOffset = Math.max(0, position.scrollOffset + e.deltaY)
+      
+      // Check for auto-chapter navigation at boundaries
+      checkAutoChapterNav()
+      
       dirty = true
       savePosition(position)
       break
@@ -621,6 +625,39 @@ function prevChapter() {
     position.sceneIndex = 0
     position.scrollOffset = 0
     onSceneChanged()
+  }
+}
+
+// ── Auto-chapter navigation ───────────────────────────────────────────
+let lastAutoNavTime = 0
+const AUTO_NAV_COOLDOWN = 1500 // ms between auto-chapter transitions
+let justNavigated = false
+
+function checkAutoChapterNav() {
+  if (!manifest || !position || !currentLines.length || justNavigated) return
+  
+  const now = Date.now()
+  if (now - lastAutoNavTime < AUTO_NAV_COOLDOWN) return
+  
+  const contentHeight = currentLines.length * config.lineHeight
+  const scrollY = position.scrollOffset
+  
+  // At bottom of content - need extra padding before auto-advancing
+  if (scrollY > contentHeight + config.lineHeight) {
+    console.log('[AutoNav] Bottom reached, going next')
+    justNavigated = true
+    lastAutoNavTime = now
+    nextScene()
+    setTimeout(() => { justNavigated = false }, 500)
+  }
+  
+  // At top of content - go to previous
+  else if (scrollY <= 50 && position.chapterIndex > 0) {
+    console.log('[AutoNav] Top reached, going prev')
+    justNavigated = true
+    lastAutoNavTime = now
+    prevScene()
+    setTimeout(() => { justNavigated = false }, 500)
   }
 }
 
