@@ -5,8 +5,11 @@ import { prepareWithSegments, layoutNextLineRange, materializeLineRange } from '
 import type { LayoutCursor } from '@chenglou/pretext'
 import type { BookScene, LayoutLine, WordBound, TypographyConfig } from './types'
 import { LayoutCache } from './layout-cache'
+import { AsciiVisualizer } from './AsciiVisualizer'
 
 
+
+const asciiVisualizer = new AsciiVisualizer()
 
 // ── Scene break detection ────────────────────────────────────────────────────
 
@@ -67,7 +70,10 @@ export function renderScene(
   searchMatch: { charOffset: number; length: number } | null,
   scrollOffset: number,
   config: TypographyConfig,
-  selection: { startLine: number; startWordIdx: number; endLine: number; endWordIdx: number } | null
+  selection: { startLine: number; startWordIdx: number; endLine: number; endWordIdx: number } | null,
+  entityManifest: Array<{ name: string; description: string }> = [],
+  mouseX?: number,
+  mouseY?: number
 ): LayoutLine[] {
   const ctx = canvas.getContext('2d')!
   const W = canvas.width
@@ -91,7 +97,7 @@ export function renderScene(
   if (canUseCache) {
     const cached = layoutCache.getLines(scene.id, config.fontSize)
     if (cached) {
-      drawLines(ctx, canvas, cached, scrollOffset, config, null, null)
+      drawLines(ctx, canvas, cached, scrollOffset, config, null, null, entityManifest, scene.illustration, mouseX, mouseY)
       return cached
     }
   }
@@ -101,6 +107,14 @@ export function renderScene(
   const baseX = config.paddingX
   const maxColW = Math.min(config.maxColumnWidth, W - config.paddingX * 2)
   let contentY = config.paddingTop
+
+  // 1. Calculate illustration height to offset text
+  let illustrationHeight = 0
+  if (scene.illustration) {
+    const imgW = Math.min(config.maxColumnWidth, W - config.paddingX * 2)
+    illustrationHeight = (scene.illustration.height / scene.illustration.width) * imgW
+    contentY += illustrationHeight + config.lineHeight * 2
+  }
 
   // We split on blank lines (\n\n) to identify paragraphs.
   // We use a more robust split to handle varying newline styles.
@@ -220,7 +234,7 @@ export function renderScene(
   layoutCache.setLines(scene.id, config.fontSize, lines)
 
   // ── Draw ──
-  drawLines(ctx, canvas, lines, scrollOffset, config, searchMatch, selection)
+  drawLines(ctx, canvas, lines, scrollOffset, config, searchMatch, selection, entityManifest, scene.illustration, mouseX, mouseY)
 
   // ── Draw entities on top ──
   const entityFont = `bold ${Math.round(config.fontSize * 0.85)}px JetBrains Mono, monospace`
@@ -248,9 +262,37 @@ function drawLines(
   scrollOffset: number,
   config: TypographyConfig,
   searchMatch: { charOffset: number; length: number } | null,
-  selection: { startLine: number; startWordIdx: number; endLine: number; endWordIdx: number } | null
+  selection: { startLine: number; startWordIdx: number; endLine: number; endWordIdx: number } | null,
+  entityManifest: Array<{ name: string; description: string }> = [],
+  illustration?: AsciiAsset,
+  mouseX?: number,
+  mouseY?: number
 ): void {
   const H = canvas.height
+
+  // 1. Draw Illustration if present
+  if (illustration) {
+    const imgW = Math.min(config.maxColumnWidth, canvas.width - config.paddingX * 2)
+    const imgH = (illustration.height / illustration.width) * imgW
+    const screenY = config.paddingTop - scrollOffset
+    
+    // Only draw if on screen
+    if (screenY + imgH > 0 && screenY < H) {
+      asciiVisualizer.render(
+        ctx,
+        illustration,
+        config.paddingX,
+        screenY,
+        imgW,
+        imgH,
+        config.theme,
+        mouseX,
+        mouseY
+      )
+    }
+  }
+
+  // 2. Draw Lines
 
   // Track char offset for search match detection
   let charOffset = 0
@@ -280,6 +322,54 @@ function drawLines(
           const wx1 = line.x + (lastWord ? lastWord.x + lastWord.w : 0)
           ctx.fillStyle = config.colors.selection
           ctx.fillRect(wx0, screenY, wx1 - wx0, config.lineHeight)
+
+          // ── Selection Handles ──
+          ctx.fillStyle = config.colors.accent || '#0078d7'
+          const handleRadius = 6
+          
+          if (li === startLine) {
+            ctx.beginPath()
+            ctx.arc(wx0, screenY, handleRadius, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.fillRect(wx0 - 1, screenY, 2, config.lineHeight)
+          }
+          if (li === endLine) {
+            ctx.beginPath()
+            ctx.arc(wx1, screenY + config.lineHeight, handleRadius, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.fillRect(wx1 - 1, screenY, 2, config.lineHeight)
+          }
+        }
+      }
+    }
+
+    // ── Entity highlights ──
+    if (entityManifest.length > 0 && !isBreakOrnament) {
+      for (const ent of entityManifest) {
+        // We do a simple case-insensitive search for the entity name in this line
+        const name = ent.name
+        const lineText = line.text.toLowerCase()
+        const lowerName = name.toLowerCase()
+        let startIdx = 0
+        while ((startIdx = lineText.indexOf(lowerName, startIdx)) !== -1) {
+           const endIdx = startIdx + name.length
+           // Check if it's a full word match (simple check)
+           const charBefore = startIdx > 0 ? lineText[startIdx - 1] : ' '
+           const charAfter  = endIdx < lineText.length ? lineText[endIdx] : ' '
+           const isWord = /[\s.,!?;:()"]/.test(charBefore) && /[\s.,!?;:()"]/.test(charAfter)
+
+           if (isWord) {
+             const preText = line.text.slice(0, startIdx)
+             const matchText = line.text.slice(startIdx, endIdx)
+             ctx.font = config.font
+             const preW = ctx.measureText(preText).width
+             const matchW = ctx.measureText(matchText).width
+             
+             // Editorial "Blue" or "Amber" underline/glow
+             ctx.fillStyle = config.colors.accent_glow || 'rgba(140, 100, 24, 0.1)'
+             ctx.fillRect(line.x + preW, screenY + config.lineHeight * 0.85, matchW, 2)
+           }
+           startIdx = endIdx
         }
       }
     }

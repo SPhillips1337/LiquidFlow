@@ -2,7 +2,7 @@
 // A CSS position:absolute floating card for entity info and AI lookups.
 // The #lookup-card element must already exist in the DOM (added in index.html).
 
-export type LookupMode = 'entity' | 'ai-loading' | 'ai-result' | 'ai-error'
+export type LookupMode = 'entity' | 'ai-loading' | 'ai-result' | 'ai-error' | 'selection-menu'
 
 export interface LookupCardState {
   mode: LookupMode
@@ -10,6 +10,7 @@ export interface LookupCardState {
   body?: string
   anchorX: number   // canvas-relative px
   anchorY: number   // canvas-relative px
+  onAction?: (action: string) => void
 }
 
 // ── Module-level state ────────────────────────────────────────────────────────
@@ -40,6 +41,13 @@ function buildBodyHtml(mode: LookupMode, body?: string): string {
       return escapeHtml(body ?? '')
     case 'ai-error':
       return escapeHtml(body ?? 'AI lookup unavailable \u2014 check Ollama connection')
+    case 'selection-menu':
+      return `
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button class="tb-btn action-query" style="background: var(--accent); color: white; border: none; flex: 1; padding: 10px;">✨ Query AI</button>
+          <button class="tb-btn action-copy" style="flex: 1; padding: 10px;">📋 Copy</button>
+        </div>
+      `
   }
 }
 
@@ -63,6 +71,14 @@ export function showLookupCard(
   const closeBtn = card.querySelector('.lookup-close') as HTMLButtonElement | null
   if (closeBtn) {
     closeBtn.onclick = () => hideLookupCard()
+  }
+
+  // Wire action buttons for selection menu
+  if (state.mode === 'selection-menu' && state.onAction) {
+    const queryBtn = card.querySelector('.action-query') as HTMLButtonElement
+    const copyBtn  = card.querySelector('.action-copy')  as HTMLButtonElement
+    if (queryBtn) queryBtn.onclick = () => state.onAction!('query')
+    if (copyBtn)  copyBtn.onclick  = () => state.onAction!('copy')
   }
 
   // Store dismiss callback

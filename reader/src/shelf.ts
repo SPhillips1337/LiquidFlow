@@ -44,15 +44,71 @@ export function renderShelf(
     const firstMood = book.chapters[0]?.scenes[0]?.mood ?? ''
 
     card.innerHTML = `
+      <div class="book-settings-trigger" title="Book Settings">\u22EE</div>
+      <div class="book-settings-menu hidden">
+        <div class="menu-item regenerate-btn">Regenerate</div>
+        <div class="menu-item delete-btn danger">Delete</div>
+      </div>
       <span class="book-emoji">${book.emoji}</span>
       <span class="book-name">${escHtml(book.title)}</span>
       <span class="book-author">${escHtml(book.author)}</span>
       ${firstMood ? `<span class="book-mood">${escHtml(firstMood)}</span>` : ''}
     `
 
-    const open = () => onSelect(book)
+    // ── Open Logic ──
+    const open = (e: Event) => {
+      // Prevent opening if clicking menu
+      if ((e.target as HTMLElement).closest('.book-settings-trigger') || 
+          (e.target as HTMLElement).closest('.book-settings-menu')) return
+      onSelect(book)
+    }
     card.addEventListener('click', open)
-    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') open() })
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') open(e) })
+
+    // ── Settings Menu Logic ──
+    const trigger = card.querySelector('.book-settings-trigger')!
+    const menu    = card.querySelector('.book-settings-menu')!
+    const regen   = card.querySelector('.regenerate-btn')!
+    const del     = card.querySelector('.delete-btn')!
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation()
+      menu.classList.toggle('hidden')
+    })
+
+    regen.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      menu.classList.add('hidden')
+      const btn = e.target as HTMLElement
+      btn.innerText = 'Regenerating...'
+      try {
+        const resp = await fetch(`/api/manage/regenerate?id=${book.id}`, { method: 'POST' })
+        if (resp.ok) {
+           btn.innerText = 'Success! Reloading...'
+           setTimeout(() => window.location.reload(), 1000)
+        } else {
+           throw new Error('Regeneration failed')
+        }
+      } catch (err) {
+        btn.innerText = 'Error (Check Console)'
+        console.error(err)
+      }
+    })
+
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      if (!confirm(`Are you sure you want to delete "${book.title}"?`)) return
+      menu.classList.add('hidden')
+      try {
+        const resp = await fetch(`/api/manage/delete?id=${book.id}`, { method: 'POST' })
+        if (resp.ok) window.location.reload()
+      } catch (err) {
+        console.error(err)
+      }
+    })
+
+    // Close menu on click outside
+    window.addEventListener('click', () => menu.classList.add('hidden'))
 
     grid.appendChild(card)
   }

@@ -32,7 +32,7 @@ export function createToolbar(
     <div class="toolbar-left">
       <button class="tb-btn tb-back" aria-label="Back to library">←</button>
     </div>
-    <div class="toolbar-center">
+    <div class="toolbar-center" style="cursor: pointer;" title="Open chapter list">
       <span class="tb-chapter-title"></span>
       <span class="tb-progress"></span>
     </div>
@@ -169,7 +169,7 @@ export function createToolbar(
   // ── Outside click / Escape to close overlays ───────────────────────────────
   function handleDocPointerdown(e: PointerEvent) {
     const target = e.target as Node
-    if (!chapterOverlay.classList.contains('hidden') && !chapterOverlay.contains(target) && target !== chaptersBtn) {
+    if (!chapterOverlay.classList.contains('hidden') && !chapterOverlay.contains(target) && target !== chaptersBtn && !toolbarCenter.contains(target)) {
       closeChapterOverlay()
     }
     if (!searchOverlay.classList.contains('hidden') && !searchOverlay.contains(target) && target !== searchBtn) {
@@ -184,6 +184,8 @@ export function createToolbar(
     }
   }
 
+  const toolbarCenter = toolbarEl.querySelector<HTMLElement>('.toolbar-center')!
+
   // ── Attach listeners ───────────────────────────────────────────────────────
   backBtn.addEventListener('click', handleBack)
   fontDecBtn.addEventListener('click', handleFontDec)
@@ -192,6 +194,7 @@ export function createToolbar(
   settingsBtn.addEventListener('click', handleSettingsClick)
   searchBtn.addEventListener('click', handleSearchToggle)
   chaptersBtn.addEventListener('click', handleChaptersToggle)
+  toolbarCenter.addEventListener('click', handleChaptersToggle)
   searchSubmitBtn.addEventListener('click', handleSearchSubmit)
   searchPrevBtn.addEventListener('click', () => callbacks.onSearchPrev())
   searchNextBtn.addEventListener('click', () => callbacks.onSearchNext())
@@ -237,6 +240,7 @@ export function createToolbar(
       settingsBtn.removeEventListener('click', handleSettingsClick)
       searchBtn.removeEventListener('click', handleSearchToggle)
       chaptersBtn.removeEventListener('click', handleChaptersToggle)
+      toolbarCenter.removeEventListener('click', handleChaptersToggle)
       searchSubmitBtn.removeEventListener('click', handleSearchSubmit)
       searchPrevBtn.removeEventListener('click', () => callbacks.onSearchPrev())
       searchNextBtn.removeEventListener('click', () => callbacks.onSearchNext())

@@ -7,6 +7,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "jimp": "^0.22.12",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {

@@ -4,6 +4,14 @@
 import type { LayoutCursor } from '@chenglou/pretext'
 export type { LayoutCursor }
 
+export interface AsciiAsset {
+  charGrid: string[][]
+  colorGrid: string[][]
+  subjectMask: boolean[][]
+  width: number
+  height: number
+}
+
 // Animation hints stored per scene by the pipeline
 export interface AnimationHints {
   mood: string  // one word: "tense" | "melancholic" | "wonder" | "ominous" | "joyful" | "neutral"
@@ -22,6 +30,7 @@ export interface BookScene {
   entities: string[]
   // New:
   animationHints: AnimationHints
+  illustration?: AsciiAsset
 }
 
 export interface BookChapter {

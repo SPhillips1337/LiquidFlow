@@ -15,7 +15,8 @@ import {
   splitScenes
 } from './gutenberg.js'
 import { annotateScene, generateEntityDescription } from './ai.js'
-import type { BookManifest, BookChapter, BookScene, EntityEntry } from '../../reader/src/types.js'
+import { convertToAscii } from './ascii.js'
+import type { BookManifest, BookChapter, BookScene, EntityEntry, AsciiAsset } from '../../reader/src/types.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = join(__dirname, '../../reader/public/books')
@@ -61,13 +62,27 @@ async function main() {
       const annotation = await annotateScene(sceneText)
       console.log(`[${annotation.mood} | ${annotation.transitionStyle}]`)
 
+      let illustration: AsciiAsset | undefined = undefined
+      
+      // For PoC, generate an illustration for the first scene of every chapter
+      // Note: In a production run, we'd use generate_image tool, 
+      // but for this script we'll check if a pre-generated image exists in /temp
+      const tempImg = join(__dirname, `../temp/${bookId}-${ci}-${si}.png`)
+      try {
+        illustration = await convertToAscii(tempImg, 60)
+        console.log(`[🎨 ASCII Illustration generated]`)
+      } catch (e) {
+        // Skip if no image found
+      }
+
       annotatedScenes.push({
         id: `${bookId}-${ci}-${si}`,
         text: sceneText,
         mood: annotation.mood,
         visualPrompt: annotation.visualPrompt,
         entities: annotation.entities,
-        animationHints: annotation
+        animationHints: annotation,
+        illustration
       })
       sceneCount++
 

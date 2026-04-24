@@ -33,6 +33,8 @@ const bookGrid          = document.getElementById('book-grid')!
 const mainCanvas        = document.getElementById('reader-canvas') as HTMLCanvasElement
 const transitionCanvas  = document.getElementById('transition-canvas') as HTMLCanvasElement
 const sceneInfoEl       = document.getElementById('scene-info')!
+const progressBar       = document.getElementById('progress-bar')!
+const progressFill       = document.getElementById('progress-fill')!
 
 // ── Core Engines ──────────────────────────────────────────────────────────────
 const animationDriver = new AnimationDriver()
@@ -44,6 +46,8 @@ let position: ReadingPosition | null = null
 let config: TypographyConfig = makeTypographyConfig(loadFontSize(), window.innerWidth, loadTheme())
 let searchState: SearchState = emptySearchState()
 let selection: SelectionState | null = null
+let mouseX = 0
+let mouseY = 0
 
 let toolbar: ReturnType<typeof createToolbar> | null = null
 let inputDetach: (() => void) | null = null
@@ -114,6 +118,9 @@ function openBook(book: BookManifest) {
   // Bootstrap entities for current scene
   spawnEntities()
 
+  // Initialize interactive scrubber
+  initScrubber()
+
   dirty = true
   startLoop()
 }
@@ -169,7 +176,10 @@ function startLoop() {
         currentMatch,
         position.scrollOffset,
         config,
-        selection
+        selection,
+        manifest.entityManifest,
+        mouseX,
+        mouseY
       )
       
       updateSceneInfo()
@@ -247,6 +257,49 @@ function spawnEntities() {
   if (!manifest || !position) return
   const scene = manifest.chapters[position.chapterIndex].scenes[position.sceneIndex]
   animationDriver.spawnEntities(scene, config.lineHeight)
+  
+  // Update progress bar
+  const total = manifest.chapters.length
+  const current = position.chapterIndex + (position.sceneIndex / manifest.chapters[position.chapterIndex].scenes.length)
+  const fraction = current / total
+  progressFill.style.width = `${fraction * 100}%`
+  if (toolbar) toolbar.setProgress(fraction)
+}
+
+// ── Scrubbing Logic ───────────────────────────────────────────────────────────
+function initScrubber() {
+  let isDragging = false
+
+  const handleScrub = (e: MouseEvent | TouchEvent) => {
+    if (!manifest) return
+    const rect = progressBar.getBoundingClientRect()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
+    const fraction = x / rect.width
+    
+    // Jump to chapter
+    const totalChapters = manifest.chapters.length
+    const targetChapter = Math.min(totalChapters - 1, Math.floor(fraction * totalChapters))
+    
+    if (position && (position.chapterIndex !== targetChapter)) {
+      position.chapterIndex = targetChapter
+      position.sceneIndex = 0
+      position.scrollOffset = 0
+      dirty = true
+      savePosition(position)
+    }
+  }
+
+  progressBar.addEventListener('mousedown', (e) => {
+    isDragging = true
+    handleScrub(e)
+  })
+  window.addEventListener('mousemove', (e) => {
+    if (isDragging) handleScrub(e)
+  })
+  window.addEventListener('mouseup', () => {
+    isDragging = false
+  })
 }
 
 // ── Input Handling ────────────────────────────────────────────────────────────
@@ -256,6 +309,11 @@ function handleInput(e: InputEvent) {
   switch (e.type) {
     case 'tap':
       handleTap(e.x, e.y)
+      break
+    case 'mousemove':
+      mouseX = e.x
+      mouseY = e.y
+      dirty = true
       break
     case 'scroll':
       position.scrollOffset = Math.max(0, position.scrollOffset + e.deltaY)
@@ -287,7 +345,7 @@ function handleInput(e: InputEvent) {
       break
     case 'drag-end':
       if (selection && (selection.startLine !== selection.endLine || selection.startWordIdx !== selection.endWordIdx)) {
-        handleSelectionLookup()
+        showSelectionMenu(e.x, e.y)
       } else {
         selection = null
         dirty = true
@@ -328,28 +386,74 @@ function handleTap(x: number, y: number) {
 }
 
 async function lookupTextAI(text: string, context?: string) {
+  console.log(`[AI Lookup] Starting query for: "${text}"`)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => {
+    console.warn(`[AI Lookup] TIMEOUT reached (60s) for: "${text}"`)
+    controller.abort()
+  }, 60000)
+
   try {
     const prompt = context 
       ? `Define the word "${text}" in the context of this sentence: "${context}". Keep it brief and scholarly.`
       : `Provide a brief, scholarly definition for the term "${text}".`
 
-    const resp = await fetch('http://localhost:11434/api/generate', {
+    console.log(`[AI Lookup] Fetching /api/ollama...`)
+    const resp = await fetch('/api/ollama', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
-        model: 'llama3', 
+        model: 'llama3:latest', 
         prompt,
         stream: false
       })
     })
+    
+    if (!resp.ok) {
+      throw new Error(`Ollama returned ${resp.status}: ${resp.statusText}`)
+    }
+
+    clearTimeout(timeoutId)
     const data = await resp.json()
+    console.log(`[AI Lookup] Success! Response length: ${data.response?.length}`)
     updateLookupCard({ mode: 'ai-result', body: data.response })
-  } catch {
-    updateLookupCard({ mode: 'ai-error' })
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    console.error(`[AI Lookup] Error:`, err)
+    const isTimeout = err.name === 'AbortError'
+    updateLookupCard({ 
+      mode: 'ai-error', 
+      body: isTimeout ? 'Lookup timed out \u2014 Ollama might be busy' : `Error: ${err.message}`
+    })
   }
 }
 
-function handleSelectionLookup() {
-  if (!selection || !manifest || !position) return
+function showSelectionMenu(x: number, y: number) {
+  if (!selection) return
+
+  showLookupCard({
+    mode: 'selection-menu',
+    title: 'Selection',
+    anchorX: x,
+    anchorY: y,
+    onAction: (action) => {
+      if (action === 'query') {
+        handleSelectionLookup()
+      } else if (action === 'copy') {
+        const text = getSelectedText()
+        navigator.clipboard.writeText(text)
+        hideLookupCard()
+      }
+    }
+  }, mainCanvas, () => {
+    selection = null
+    dirty = true
+  })
+}
+
+function getSelectedText(): string {
+  if (!selection || !manifest || !position) return ''
   
   // Extract text from selection
   let text = ''
@@ -358,25 +462,26 @@ function handleSelectionLookup() {
 
   for (let li = startL; li <= endL; li++) {
     const line = currentLines[li]
+    if (!line) continue
     const wStart = (li === selection.startLine) ? selection.startWordIdx : 0
     const wEnd   = (li === selection.endLine)   ? selection.endWordIdx   : line.words.length - 1
     
-    // Note: this simple extraction doesn't handle reversed drag perfectly but works for PoC
     const words = line.words.slice(Math.min(wStart, wEnd), Math.max(wStart, wEnd) + 1)
     text += words.map(w => w.word).join(' ') + ' '
   }
+  return text.trim()
+}
 
-  showLookupCard({
+function handleSelectionLookup() {
+  const text = getSelectedText()
+  if (!text) return
+
+  updateLookupCard({
     mode: 'ai-loading',
-    title: 'Selection Lookup',
-    anchorX: window.innerWidth / 2, 
-    anchorY: window.innerHeight / 2
-  }, mainCanvas, () => {
-    selection = null
-    dirty = true
+    body: 'Analyzing selection\u2026'
   })
 
-  lookupTextAI(text.trim())
+  lookupTextAI(text)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

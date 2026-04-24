@@ -5,6 +5,7 @@ export type InputEvent =
   | { type: 'drag-start'; x: number; y: number }
   | { type: 'drag-move';  x: number; y: number }
   | { type: 'drag-end';   x: number; y: number }
+  | { type: 'mousemove';  x: number; y: number }
   | { type: 'scroll';     deltaY: number }
   | { type: 'pinch';      scaleDelta: number }  // scaleDelta > 1 = zoom in, < 1 = zoom out
   | { type: 'key';        key: string; modifiers: string[] }  // modifiers: ['ctrl', 'meta', 'shift', 'alt']
@@ -53,8 +54,10 @@ export function attachInputRouter(
   }
 
   function onMouseMove(e: MouseEvent) {
-    if (!pointerDown) return
     const { x, y } = canvasCoords(canvas, e.clientX, e.clientY)
+    onEvent({ type: 'mousemove', x, y })
+    
+    if (!pointerDown) return
     const dx = x - downX
     const dy = y - downY
     const dist = Math.sqrt(dx * dx + dy * dy)
