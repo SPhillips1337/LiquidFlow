@@ -4,6 +4,7 @@ export interface ToolbarCallbacks {
   onBack(): void
   onFontIncrease(): void
   onFontDecrease(): void
+  onFontReset(): void
   onThemeToggle(): void
   onSettingsClick(): void
   onSearchSubmit(query: string): void
@@ -11,6 +12,8 @@ export interface ToolbarCallbacks {
   onSearchPrev(): void
   onSearchClose(): void
   onChapterSelect(chapterIndex: number): void
+  onChapterNext(): void
+  onChapterPrev(): void
 }
 
 export function createToolbar(
@@ -19,6 +22,7 @@ export function createToolbar(
   callbacks: ToolbarCallbacks
 ): {
   setChapterTitle(title: string): void
+  setChapterNav(hasPrev: boolean, hasNext: boolean): void
   setProgress(fraction: number): void
   setSearchState(state: SearchState): void
   setFontSize(size: number, min: number, max: number): void
@@ -33,11 +37,14 @@ export function createToolbar(
       <button class="tb-btn tb-back" aria-label="Back to library">←</button>
     </div>
     <div class="toolbar-center" style="cursor: pointer;" title="Open chapter list">
+      <button class="tb-btn tb-chapter-prev" aria-label="Previous chapter">‹</button>
       <span class="tb-chapter-title"></span>
       <span class="tb-progress"></span>
+      <button class="tb-btn tb-chapter-next" aria-label="Next chapter">›</button>
     </div>
     <div class="toolbar-right">
       <button class="tb-btn tb-font-dec" aria-label="Decrease font size">A−</button>
+      <button class="tb-btn tb-font-reset" aria-label="Reset font size">⟲</button>
       <button class="tb-btn tb-font-inc" aria-label="Increase font size">A+</button>
       <button class="tb-btn tb-theme" aria-label="Toggle light/dark mode">☀️</button>
       <button class="tb-btn tb-settings" aria-label="Settings">⚙️</button>
@@ -74,12 +81,15 @@ export function createToolbar(
   const chapterTitleEl = toolbarEl.querySelector<HTMLElement>('.tb-chapter-title')!
   const progressEl = toolbarEl.querySelector<HTMLElement>('.tb-progress')!
   const fontDecBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-font-dec')!
+  const fontResetBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-font-reset')!
   const fontIncBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-font-inc')!
   const themeBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-theme')!
   const settingsBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-settings')!
   const searchBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-search')!
   const chaptersBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-chapters')!
   const backBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-back')!
+  const chapterPrevBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-chapter-prev')!
+  const chapterNextBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-chapter-next')!
 
   const chapterListInner = chapterOverlay.querySelector<HTMLElement>('.chapter-list-inner')!
 
@@ -125,7 +135,16 @@ export function createToolbar(
 
   // ── Button handlers ────────────────────────────────────────────────────────
   function handleBack() { callbacks.onBack() }
+function handleChapterPrev(e: Event) { 
+  e.stopPropagation()
+  callbacks.onChapterPrev() 
+}
+function handleChapterNext(e: Event) { 
+  e.stopPropagation()
+  callbacks.onChapterNext() 
+}
   function handleFontDec() { callbacks.onFontDecrease() }
+  function handleFontReset() { callbacks.onFontReset() }
   function handleFontInc() { callbacks.onFontIncrease() }
   function handleThemeToggle() { callbacks.onThemeToggle() }
   function handleSettingsClick() { callbacks.onSettingsClick() }
@@ -188,7 +207,10 @@ export function createToolbar(
 
   // ── Attach listeners ───────────────────────────────────────────────────────
   backBtn.addEventListener('click', handleBack)
+  chapterPrevBtn.addEventListener('click', handleChapterPrev)
+  chapterNextBtn.addEventListener('click', handleChapterNext)
   fontDecBtn.addEventListener('click', handleFontDec)
+  fontResetBtn.addEventListener('click', handleFontReset)
   fontIncBtn.addEventListener('click', handleFontInc)
   themeBtn.addEventListener('click', handleThemeToggle)
   settingsBtn.addEventListener('click', handleSettingsClick)
@@ -209,6 +231,11 @@ export function createToolbar(
       chapterTitleEl.textContent = title
     },
 
+    setChapterNav(hasPrev: boolean, hasNext: boolean) {
+      chapterPrevBtn.disabled = !hasPrev
+      chapterNextBtn.disabled = !hasNext
+    },
+
     setProgress(fraction: number) {
       progressEl.textContent = `${Math.round(fraction * 100)}%`
     },
@@ -226,6 +253,7 @@ export function createToolbar(
     setFontSize(size: number, min: number, max: number) {
       fontDecBtn.disabled = size <= min
       fontIncBtn.disabled = size >= max
+      fontResetBtn.disabled = size === 18
     },
 
     setTheme(theme: 'dark' | 'light' | 'sepia') {

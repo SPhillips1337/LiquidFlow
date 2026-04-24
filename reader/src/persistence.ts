@@ -28,11 +28,13 @@ export function saveFontSize(size: number): void {
   localStorage.setItem('liquidflow.fontSize', String(size))
 }
 
+export const DEFAULT_FONT_SIZE = 18
+
 export function loadFontSize(): number {
   const raw = localStorage.getItem('liquidflow.fontSize')
-  if (raw === null) return 18
+  if (raw === null) return DEFAULT_FONT_SIZE
   const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : 18
+  return Number.isFinite(parsed) ? parsed : DEFAULT_FONT_SIZE
 }
 
 export function saveTheme(theme: string): void {

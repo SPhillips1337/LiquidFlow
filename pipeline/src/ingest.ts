@@ -16,6 +16,7 @@ import {
 } from './gutenberg.js'
 import { annotateScene, generateEntityDescription } from './ai.js'
 import { convertToAscii, generateProceduralAscii } from './ascii.js'
+import { fetchAndConvert } from './image-fetcher.js'
 import type { BookManifest, BookChapter, BookScene, EntityEntry, AsciiAsset } from '../../reader/src/types.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -64,15 +65,22 @@ async function main() {
 
       let illustration: AsciiAsset | undefined = undefined
       
-      // Try to load pre-generated image, else create procedural based on mood
+      // First, try to load pre-generated image from temp folder
       const tempImg = join(__dirname, `../temp/${bookId}-${ci}-${si}.png`)
       try {
         illustration = await convertToAscii(tempImg, 60)
-        console.log(`[🎨 ASCII from image]`)
+        console.log(`[🎨 ASCII from local image]`)
       } catch {
-        // Generate procedural based on mood/theme
-        illustration = generateProceduralAscii(annotation.mood, meta.theme || 'dark')
-        console.log(`[🎨 ASCII procedurally generated: ${annotation.mood}]`)
+        // Second, try fetching from Unsplash/image API based on visualPrompt
+        const fetched = await fetchAndConvert(annotation.visualPrompt, 60)
+        if (fetched) {
+          illustration = fetched
+          console.log(`[🎨 ASCII from image search: ${annotation.visualPrompt}]`)
+        } else {
+          // Third, fallback to procedural based on mood
+          illustration = generateProceduralAscii(annotation.mood, meta.theme || 'dark')
+          console.log(`[🎨 ASCII procedural: ${annotation.mood}]`)
+        }
       }
 
       annotatedScenes.push({

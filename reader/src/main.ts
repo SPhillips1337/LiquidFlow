@@ -22,7 +22,8 @@ import {
   saveFontSize, 
   loadFontSize, 
   saveTheme, 
-  loadTheme 
+  loadTheme,
+  DEFAULT_FONT_SIZE
 } from './persistence'
 import { renderTransition } from './transition'
 
@@ -98,17 +99,21 @@ function openBook(book: BookManifest) {
     onBack: closeBook,
     onFontIncrease: () => updateFontSize(config.fontSize + 2),
     onFontDecrease: () => updateFontSize(config.fontSize - 2),
+    onFontReset: () => updateFontSize(DEFAULT_FONT_SIZE),
     onThemeToggle: toggleTheme,
     onSettingsClick: () => alert('Settings menu coming soon! Use the toggle for now.'),
     onSearchSubmit: handleSearch,
     onSearchNext: () => { searchState = nextMatch(searchState); jumpToMatch(); },
     onSearchPrev: () => { searchState = prevMatch(searchState); jumpToMatch(); },
     onSearchClose: () => { searchState = emptySearchState(); dirty = true; },
-    onChapterSelect: (idx) => jumpToChapter(idx)
+    onChapterSelect: (idx) => jumpToChapter(idx),
+    onChapterNext: nextChapter,
+    onChapterPrev: prevChapter
   })
   toolbar.setFontSize(config.fontSize, 12, 48)
   toolbar.setTheme(config.theme)
   toolbar.setChapterTitle(book.chapters[position.chapterIndex].title)
+  toolbar.setChapterNav(position.chapterIndex > 0, position.chapterIndex < book.chapters.length - 1)
   
   // Sync body class for UI theme
   document.body.setAttribute('data-theme', config.theme)
@@ -281,6 +286,9 @@ function onSceneChanged() {
     position.sceneIndex
   )
   updateChapterNavHighlight()
+  if (toolbar) {
+    toolbar.setChapterNav(position.chapterIndex > 0, position.chapterIndex < (manifest?.chapters.length ?? 0) - 1)
+  }
   dirty = true
 }
 
@@ -591,6 +599,26 @@ function prevScene() {
     position.chapterIndex--
     const ch = manifest.chapters[position.chapterIndex]
     position.sceneIndex = ch.scenes.length - 1
+    position.scrollOffset = 0
+    onSceneChanged()
+  }
+}
+
+function nextChapter() {
+  if (!manifest || !position) return
+  if (position.chapterIndex < manifest.chapters.length - 1) {
+    position.chapterIndex++
+    position.sceneIndex = 0
+    position.scrollOffset = 0
+    onSceneChanged()
+  }
+}
+
+function prevChapter() {
+  if (!manifest || !position) return
+  if (position.chapterIndex > 0) {
+    position.chapterIndex--
+    position.sceneIndex = 0
     position.scrollOffset = 0
     onSceneChanged()
   }
