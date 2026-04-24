@@ -1,24 +1,27 @@
 // ── Project Gutenberg fetcher & cleaner ──────────────────────────────────────
 
 // Known Gutenberg plain-text URLs for our PoC books
-export const GUTENBERG_BOOKS: Record<string, { url: string; title: string; author: string; emoji: string }> = {
+export const GUTENBERG_BOOKS: Record<string, { url: string; title: string; author: string; emoji: string; theme?: string }> = {
   'time-machine': {
     url: 'https://www.gutenberg.org/cache/epub/35/pg35.txt',
     title: 'The Time Machine',
     author: 'H.G. Wells',
-    emoji: '⏱'
+    emoji: '⏱',
+    theme: 'dark'
   },
   'alice': {
     url: 'https://www.gutenberg.org/cache/epub/11/pg11.txt',
     title: "Alice's Adventures in Wonderland",
     author: 'Lewis Carroll',
-    emoji: '🐇'
+    emoji: '🐇',
+    theme: 'sepia'
   },
   'moby-dick': {
     url: 'https://www.gutenberg.org/cache/epub/2701/pg2701.txt',
     title: 'Moby-Dick',
     author: 'Herman Melville',
-    emoji: '🐋'
+    emoji: '🐋',
+    theme: 'dark'
   }
 }
 

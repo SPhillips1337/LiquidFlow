@@ -68,6 +68,7 @@ async function init() {
     resizeCanvas(mainCanvas)
     resizeCanvas(transitionCanvas)
     layoutCache.clear()
+    initChapterNav() // update nav visibility
     dirty = true
   })
 }
@@ -121,6 +122,9 @@ function openBook(book: BookManifest) {
   // Initialize interactive scrubber
   initScrubber()
 
+  // Initialize chapter navigation sidebar
+  initChapterNav()
+
   dirty = true
   startLoop()
 }
@@ -137,6 +141,32 @@ function closeBook() {
   
   readerView.classList.remove('active')
   shelfView.classList.add('active')
+
+  const nav = document.getElementById('chapter-nav')
+  if (nav) nav.classList.add('hidden')
+}
+
+function initChapterNav() {
+  if (!manifest) return
+  const nav = document.getElementById('chapter-nav')
+  const inner = nav?.querySelector('.chapter-nav-inner')
+  if (!nav || !inner) return
+
+  inner.innerHTML = ''
+  manifest.chapters.forEach((ch, idx) => {
+    const item = document.createElement('div')
+    item.className = 'chapter-nav-item'
+    item.textContent = ch.title
+    if (idx === position?.chapterIndex) {
+      item.classList.add('active')
+      item.textContent = `▸ ${item.textContent}`
+    }
+    item.addEventListener('click', () => jumpToChapter(idx))
+    inner.appendChild(item)
+  })
+
+  const show = window.innerWidth >= 900
+  nav.classList.toggle('hidden', !show)
 }
 
 // ── Main Loop ─────────────────────────────────────────────────────────────────
@@ -250,7 +280,24 @@ function onSceneChanged() {
     position.chapterIndex,
     position.sceneIndex
   )
+  updateChapterNavHighlight()
   dirty = true
+}
+
+function updateChapterNavHighlight() {
+  const nav = document.getElementById('chapter-nav')
+  const items = nav?.querySelectorAll('.chapter-nav-item')
+  if (!items) return
+  items.forEach((item, idx) => {
+    const el = item as HTMLElement
+    if (idx === position?.chapterIndex) {
+      el.classList.add('active')
+      el.textContent = `▸ ${manifest?.chapters[idx]?.title ?? ''}`
+    } else {
+      el.classList.remove('active')
+      el.textContent = manifest?.chapters[idx]?.title ?? ''
+    }
+  })
 }
 
 function spawnEntities() {
@@ -385,13 +432,14 @@ function handleTap(x: number, y: number) {
   }
 }
 
-async function lookupTextAI(text: string, context?: string) {
-  console.log(`[AI Lookup] Starting query for: "${text}"`)
+async function lookupTextAI(text: string, context?: string, retryCount = 0) {
+  console.log(`[AI Lookup] Starting query for: "${text}" (retry: ${retryCount})`)
   const controller = new AbortController()
+  const timeoutMs = retryCount > 0 ? 45000 : 30000 // shorter on retry
   const timeoutId = setTimeout(() => {
-    console.warn(`[AI Lookup] TIMEOUT reached (60s) for: "${text}"`)
+    console.warn(`[AI Lookup] TIMEOUT ${timeoutMs/1000}s reached for: "${text}"`)
     controller.abort()
-  }, 60000)
+  }, timeoutMs)
 
   try {
     const prompt = context 
@@ -422,9 +470,16 @@ async function lookupTextAI(text: string, context?: string) {
     clearTimeout(timeoutId)
     console.error(`[AI Lookup] Error:`, err)
     const isTimeout = err.name === 'AbortError'
+    
+    // Retry once on timeout
+    if (isTimeout && retryCount === 0) {
+      console.log(`[AI Lookup] Retrying with longer timeout...`)
+      return lookupTextAI(text, context, 1)
+    }
+    
     updateLookupCard({ 
       mode: 'ai-error', 
-      body: isTimeout ? 'Lookup timed out \u2014 Ollama might be busy' : `Error: ${err.message}`
+      body: isTimeout ? 'Lookup timed out — Ollama might be busy' : `Error: ${err.message}`
     })
   }
 }

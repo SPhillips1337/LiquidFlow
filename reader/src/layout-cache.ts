@@ -10,7 +10,8 @@ export const THEMES: Record<string, any> = {
     accent: '#c8922a',
     muted: '#4a4540',
     glow: 'rgba(200,146,42,0.4)',
-    selection: 'rgba(200,146,42,0.2)'
+    selection: 'rgba(200,146,42,0.2)',
+    accent_glow: 'rgba(200,146,42,0.6)'
   },
   light: {
     bg: '#fcfaf7',
@@ -18,7 +19,8 @@ export const THEMES: Record<string, any> = {
     accent: '#8c6418',
     muted: '#a8a098',
     glow: 'rgba(140,100,24,0.2)',
-    selection: 'rgba(140,100,24,0.15)'
+    selection: 'rgba(140,100,24,0.15)',
+    accent_glow: 'rgba(140,100,24,0.5)'
   },
   sepia: {
     bg: '#f4ecd8',
@@ -26,7 +28,8 @@ export const THEMES: Record<string, any> = {
     accent: '#965e2b',
     muted: '#bda78e',
     glow: 'rgba(150,94,43,0.25)',
-    selection: 'rgba(150,94,43,0.15)'
+    selection: 'rgba(150,94,43,0.15)',
+    accent_glow: 'rgba(150,94,43,0.5)'
   }
 }
 

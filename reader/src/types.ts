@@ -64,6 +64,7 @@ export interface ThemeColors {
   muted: string
   glow: string
   selection: string
+  accent_glow: string
 }
 
 // Typography configuration derived from font size + canvas width

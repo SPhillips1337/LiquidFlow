@@ -3,7 +3,7 @@
 
 import { prepareWithSegments, layoutNextLineRange, materializeLineRange } from '@chenglou/pretext'
 import type { LayoutCursor } from '@chenglou/pretext'
-import type { BookScene, LayoutLine, WordBound, TypographyConfig } from './types'
+import type { BookScene, LayoutLine, WordBound, TypographyConfig, AsciiAsset } from './types'
 import { LayoutCache } from './layout-cache'
 import { AsciiVisualizer } from './AsciiVisualizer'
 

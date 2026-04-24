@@ -64,3 +64,73 @@ export async function convertToAscii(imagePath: string, targetWidth = 60): Promi
     height
   };
 }
+
+// Generate procedural ASCII art based on mood
+export function generateProceduralAscii(mood: string, theme: string): AsciiAsset {
+  const patterns: Record<string, string[][]> = {
+    tense: [
+      ['.', '.', '.', 'x', 'x', '.', '.', '.'],
+      ['.', 'x', 'X', 'X', 'X', 'x', '.', '.'],
+      ['.', '.', 'x', 'x', 'x', '.', '.', '.'],
+    ],
+    melancholic: [
+      ['.', '.', '~', '~', '~', '.', '.'],
+      ['.', '~', '-', '-', '~', '~', '.'],
+      ['.', '.', '-', '-', '.', '.', '.'],
+    ],
+    wonder: [
+      ['.', '*', '.', '*', '.'],
+      ['*', '.', '*', '.', '*'],
+      ['.', '*', '.', '*', '.'],
+    ],
+    ominous: [
+      ['.', '.', '#', '#', '.', '.'],
+      ['.', '#', '#', '#', '#', '.'],
+      ['#', '#', '#', '#', '#', '#'],
+    ],
+    joyful: [
+      ['.', '+', '.', '+', '.'],
+      ['+', '.', '+', '.', '+'],
+      ['.', '+', '.', '+', '.'],
+    ],
+    neutral: [
+      ['.', '-', '.', '-', '.'],
+      ['-', '.', '-', '.', '-'],
+      ['.', '-', '.', '-', '.'],
+    ]
+  }
+
+  // Theme colors
+  const colors: Record<string, string> = {
+    dark: '#c8922a',
+    light: '#8c6418',
+    sepia: '#965e2b'
+  }
+
+  const pattern = patterns[mood] || patterns.neutral
+  const color = colors[theme] || colors.dark
+  const width = pattern[0].length
+  const height = pattern.length
+
+  // Expand pattern to target size
+  const charGrid: string[][] = []
+  const colorGrid: string[][] = []
+  const subjectMask: boolean[][] = []
+
+  for (let y = 0; y < height; y++) {
+    const charRow: string[] = []
+    const colorRow: string[] = []
+    const maskRow: boolean[] = []
+    for (let x = 0; x < width; x++) {
+      const char = pattern[y]?.[x] || '.'
+      charRow.push(char)
+      colorRow.push(char !== '.' ? color : 'transparent')
+      maskRow.push(char !== '.' && char !== '-')
+    }
+    charGrid.push(charRow)
+    colorGrid.push(colorRow)
+    subjectMask.push(maskRow)
+  }
+
+  return { charGrid, colorGrid, subjectMask, width, height }
+}

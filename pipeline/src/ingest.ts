@@ -15,7 +15,7 @@ import {
   splitScenes
 } from './gutenberg.js'
 import { annotateScene, generateEntityDescription } from './ai.js'
-import { convertToAscii } from './ascii.js'
+import { convertToAscii, generateProceduralAscii } from './ascii.js'
 import type { BookManifest, BookChapter, BookScene, EntityEntry, AsciiAsset } from '../../reader/src/types.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -64,15 +64,15 @@ async function main() {
 
       let illustration: AsciiAsset | undefined = undefined
       
-      // For PoC, generate an illustration for the first scene of every chapter
-      // Note: In a production run, we'd use generate_image tool, 
-      // but for this script we'll check if a pre-generated image exists in /temp
+      // Try to load pre-generated image, else create procedural based on mood
       const tempImg = join(__dirname, `../temp/${bookId}-${ci}-${si}.png`)
       try {
         illustration = await convertToAscii(tempImg, 60)
-        console.log(`[🎨 ASCII Illustration generated]`)
-      } catch (e) {
-        // Skip if no image found
+        console.log(`[🎨 ASCII from image]`)
+      } catch {
+        // Generate procedural based on mood/theme
+        illustration = generateProceduralAscii(annotation.mood, meta.theme || 'dark')
+        console.log(`[🎨 ASCII procedurally generated: ${annotation.mood}]`)
       }
 
       annotatedScenes.push({

@@ -33,6 +33,11 @@ export function renderShelf(
   onSelect: (book: BookManifest) => void
 ): void {
   grid.innerHTML = ''
+  
+  // Close any open menu when clicking anywhere else
+  const closeAllMenus = () => {
+    grid.querySelectorAll('.book-settings-menu').forEach(m => m.classList.add('hidden'))
+  }
 
   for (const book of books) {
     const card = document.createElement('div')
@@ -56,29 +61,35 @@ export function renderShelf(
     `
 
     // ── Open Logic ──
-    const open = (e: Event) => {
-      // Prevent opening if clicking menu
-      if ((e.target as HTMLElement).closest('.book-settings-trigger') || 
-          (e.target as HTMLElement).closest('.book-settings-menu')) return
+    card.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement
+      
+      // 1. Handle Trigger Click
+      if (target.closest('.book-settings-trigger')) {
+        e.stopPropagation()
+        const menu = card.querySelector('.book-settings-menu')!
+        const isHidden = menu.classList.contains('hidden')
+        closeAllMenus() // Close others first
+        if (isHidden) menu.classList.remove('hidden')
+        return
+      }
+
+      // 2. Handle Menu Item Click
+      if (target.closest('.book-settings-menu')) {
+        e.stopPropagation()
+        return
+      }
+
+      // 3. Otherwise, open the book
       onSelect(book)
-    }
-    card.addEventListener('click', open)
-    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') open(e) })
-
-    // ── Settings Menu Logic ──
-    const trigger = card.querySelector('.book-settings-trigger')!
-    const menu    = card.querySelector('.book-settings-menu')!
-    const regen   = card.querySelector('.regenerate-btn')!
-    const del     = card.querySelector('.delete-btn')!
-
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation()
-      menu.classList.toggle('hidden')
     })
+
+    // ── Menu Action Listeners ──
+    const regen = card.querySelector('.regenerate-btn')!
+    const del   = card.querySelector('.delete-btn')!
 
     regen.addEventListener('click', async (e) => {
       e.stopPropagation()
-      menu.classList.add('hidden')
       const btn = e.target as HTMLElement
       btn.innerText = 'Regenerating...'
       try {
@@ -90,7 +101,7 @@ export function renderShelf(
            throw new Error('Regeneration failed')
         }
       } catch (err) {
-        btn.innerText = 'Error (Check Console)'
+        btn.innerText = 'Error'
         console.error(err)
       }
     })
@@ -98,7 +109,6 @@ export function renderShelf(
     del.addEventListener('click', async (e) => {
       e.stopPropagation()
       if (!confirm(`Are you sure you want to delete "${book.title}"?`)) return
-      menu.classList.add('hidden')
       try {
         const resp = await fetch(`/api/manage/delete?id=${book.id}`, { method: 'POST' })
         if (resp.ok) window.location.reload()
@@ -107,11 +117,11 @@ export function renderShelf(
       }
     })
 
-    // Close menu on click outside
-    window.addEventListener('click', () => menu.classList.add('hidden'))
-
     grid.appendChild(card)
   }
+
+  // Final catch-all to close menus when clicking outside the shelf
+  window.addEventListener('click', closeAllMenus, { once: true })
 }
 
 function escHtml(s: string): string {

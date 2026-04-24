@@ -12,7 +12,6 @@ export interface AsciiAsset {
 
 export class AsciiVisualizer {
   private frameCount = 0;
-  private readonly ramp = '@#S08Xox+=;:-,.';
 
   render(
     ctx: CanvasRenderingContext2D,
