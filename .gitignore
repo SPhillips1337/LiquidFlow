@@ -14,6 +14,10 @@ reader/public/books/*.manifest.json
 .env
 .env.local
 .env.*.local
+reader/.env
+reader/.env.local
+pipeline/.env
+pipeline/.env.local
 
 # Logs
 npm-debug.log*
@@ -35,3 +39,6 @@ Thumbs.db
 
 # Vite cache
 .vite/
+Story2Blogger (2).json
+NOTES.md
+brief.md

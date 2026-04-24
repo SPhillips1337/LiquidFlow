@@ -1,278 +1,455 @@
-// ── LiquidFlow Reader — Main Entry ──────────────────────────────────────────
-
+// ── LiquidFlow Reader — Kindle Plus App Shell ──────────────────────────────────
 import './style.css'
-import type { BookManifest, OrbState, RenderState } from './types'
+import type { 
+  BookManifest, 
+  ReadingPosition, 
+  TypographyConfig, 
+  SearchState, 
+  LayoutLine, 
+  SelectionState 
+} from './types'
 import { loadShelf, renderShelf } from './shelf'
-import { renderScene, resizeCanvas, getLogicalSize } from './renderer'
-import { fetchAiAscii } from './ascii'
-import { showMarginalia, hideMarginalia } from './marginalia'
+import { renderScene, resizeCanvas } from './renderer'
+import { AnimationDriver } from './animation-driver'
+import { LayoutCache, makeTypographyConfig } from './layout-cache'
+import { createToolbar } from './toolbar'
+import { attachInputRouter, type InputEvent } from './input'
+import { showLookupCard, updateLookupCard, hideLookupCard } from './lookup-card'
+import { searchBook, nextMatch, prevMatch, emptySearchState } from './search'
+import { 
+  savePosition, 
+  loadPosition, 
+  saveFontSize, 
+  loadFontSize, 
+  saveTheme, 
+  loadTheme 
+} from './persistence'
+import { renderTransition } from './transition'
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const shelfView     = document.getElementById('shelf')!
-const readerView    = document.getElementById('reader-view')!
-const bookGrid      = document.getElementById('book-grid')!
-const canvas        = document.getElementById('reader-canvas') as HTMLCanvasElement
-const btnBack       = document.getElementById('btn-back')!
-const btnAscii      = document.getElementById('btn-ascii')!
-const bookTitleNav  = document.getElementById('book-title-nav')!
-const asciiPanel    = document.getElementById('ascii-panel')!
-const marginalia    = document.getElementById('marginalia')!
-const margContent   = document.getElementById('marginalia-content')!
-const margClose     = document.getElementById('marginalia-close')!
-const progressFill  = document.getElementById('progress-fill')!
-const sceneInfo     = document.getElementById('scene-info')!
+const shelfView         = document.getElementById('shelf')!
+const readerView        = document.getElementById('reader-view')!
+const bookGrid          = document.getElementById('book-grid')!
+const mainCanvas        = document.getElementById('reader-canvas') as HTMLCanvasElement
+const transitionCanvas  = document.getElementById('transition-canvas') as HTMLCanvasElement
+const sceneInfoEl       = document.getElementById('scene-info')!
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let state: RenderState | null = null
-let rafId = 0
+// ── Core Engines ──────────────────────────────────────────────────────────────
+const animationDriver = new AnimationDriver()
+const layoutCache     = new LayoutCache()
+
+// ── App State ─────────────────────────────────────────────────────────────────
+let manifest: BookManifest | null = null
+let position: ReadingPosition | null = null
+let config: TypographyConfig = makeTypographyConfig(loadFontSize(), window.innerWidth, loadTheme())
+let searchState: SearchState = emptySearchState()
+let selection: SelectionState | null = null
+
+let toolbar: ReturnType<typeof createToolbar> | null = null
+let inputDetach: (() => void) | null = null
+let currentLines: LayoutLine[] = []
 let dirty = true
+let lastTime = performance.now()
+let rafId = 0
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Initialization ────────────────────────────────────────────────────────────
 async function init() {
   const books = await loadShelf()
   renderShelf(books, bookGrid, openBook)
+
+  // Handle global resize
+  window.addEventListener('resize', () => {
+    if (!manifest) return
+    config = makeTypographyConfig(config.fontSize, window.innerWidth, config.theme)
+    resizeCanvas(mainCanvas)
+    resizeCanvas(transitionCanvas)
+    layoutCache.clear()
+    dirty = true
+  })
 }
 
 function openBook(book: BookManifest) {
-  const orb: OrbState = {
-    x: 0, y: 0,
-    radius: 70,
-    dragging: false
-  }
-
-  state = {
-    manifest: book,
+  manifest = book
+  
+  // Load or init position
+  const saved = loadPosition(book.id)
+  position = saved || {
+    bookId: book.id,
     chapterIndex: 0,
     sceneIndex: 0,
-    scrollOffset: 0,
-    orb,
-    asciiVisible: false
+    scrollOffset: 0
   }
 
-  // Position orb in centre of canvas initially
-  const { w, h } = getLogicalSize(canvas)
-  orb.x = w * 0.72
-  orb.y = h * 0.38
-
-  bookTitleNav.textContent = book.title
+  // Sync UI
   shelfView.classList.remove('active')
   readerView.classList.add('active')
+  
+  resizeCanvas(mainCanvas)
+  resizeCanvas(transitionCanvas)
+  animationDriver.setCanvasSize(mainCanvas.width, mainCanvas.height)
 
-  resizeCanvas(canvas)
-  loadSceneAscii()
+  // Create toolbar
+  toolbar = createToolbar(readerView, book, {
+    onBack: closeBook,
+    onFontIncrease: () => updateFontSize(config.fontSize + 2),
+    onFontDecrease: () => updateFontSize(config.fontSize - 2),
+    onThemeToggle: toggleTheme,
+    onSettingsClick: () => alert('Settings menu coming soon! Use the toggle for now.'),
+    onSearchSubmit: handleSearch,
+    onSearchNext: () => { searchState = nextMatch(searchState); jumpToMatch(); },
+    onSearchPrev: () => { searchState = prevMatch(searchState); jumpToMatch(); },
+    onSearchClose: () => { searchState = emptySearchState(); dirty = true; },
+    onChapterSelect: (idx) => jumpToChapter(idx)
+  })
+  toolbar.setFontSize(config.fontSize, 12, 48)
+  toolbar.setTheme(config.theme)
+  toolbar.setChapterTitle(book.chapters[position.chapterIndex].title)
+  
+  // Sync body class for UI theme
+  document.body.setAttribute('data-theme', config.theme)
+
+  // Attach input
+  inputDetach = attachInputRouter(mainCanvas, handleInput)
+
+  // Bootstrap entities for current scene
+  spawnEntities()
+
   dirty = true
   startLoop()
 }
 
 function closeBook() {
   cancelAnimationFrame(rafId)
-  state = null
+  if (toolbar) toolbar.destroy()
+  if (inputDetach) inputDetach()
+  
+  manifest = null
+  position = null
+  toolbar = null
+  inputDetach = null
+  
   readerView.classList.remove('active')
   shelfView.classList.add('active')
-  hideMarginalia(marginalia)
 }
 
-// ── Render loop ───────────────────────────────────────────────────────────────
+// ── Main Loop ─────────────────────────────────────────────────────────────────
 function startLoop() {
-  cancelAnimationFrame(rafId)
+  lastTime = performance.now()
+  
+  function loop(now: number) {
+    if (!manifest || !position) return
+    
+    const dt = now - lastTime
+    lastTime = now
 
-  function loop() {
-    if (!state) return
+    // 1. Update animations
+    const entitiesMoved = animationDriver.tick(dt)
+    if (entitiesMoved) dirty = true
+
+    // 2. Handle transitions
+    const transition = animationDriver.updateTransition()
+    if (transition) {
+      transitionCanvas.classList.remove('hidden')
+      renderTransition(transitionCanvas, transition)
+    } else {
+      transitionCanvas.classList.add('hidden')
+    }
+
+    // 3. Render reader content
     if (dirty) {
-      const { w } = getLogicalSize(canvas)
-      // Sync canvas logical width (height is CSS flex)
-      canvas.style.width = '100%'
-
-      const scene = currentScene()
-      if (scene) {
-        renderScene(canvas, scene.text, state.orb, state.scrollOffset)
-        updateProgress()
-        updateSceneInfo()
-      }
+      const scene = manifest.chapters[position.chapterIndex].scenes[position.sceneIndex]
+      const obstacles = animationDriver.getEntityObstacles()
+      const currentMatch = searchState.matches.length > 0 ? searchState.matches[searchState.currentIndex] : null
+      
+      currentLines = renderScene(
+        mainCanvas,
+        scene,
+        layoutCache,
+        obstacles,
+        currentMatch,
+        position.scrollOffset,
+        config,
+        selection
+      )
+      
+      updateSceneInfo()
+      if (toolbar) toolbar.setProgress(calculateProgress())
       dirty = false
     }
+
     rafId = requestAnimationFrame(loop)
   }
-
+  
   rafId = requestAnimationFrame(loop)
 }
 
-function currentScene() {
-  if (!state) return null
-  return state.manifest.chapters[state.chapterIndex]?.scenes[state.sceneIndex] ?? null
-}
-
-function updateProgress() {
-  if (!state) return
-  const totalScenes = state.manifest.chapters.reduce((s, c) => s + c.scenes.length, 0)
-  let done = 0
-  for (let ci = 0; ci < state.chapterIndex; ci++) {
-    done += state.manifest.chapters[ci].scenes.length
-  }
-  done += state.sceneIndex
-  progressFill.style.width = `${Math.round((done / totalScenes) * 100)}%`
-}
-
-function updateSceneInfo() {
-  if (!state) return
-  const ch = state.manifest.chapters[state.chapterIndex]
-  sceneInfo.textContent = `${ch?.title ?? ''} · scene ${state.sceneIndex + 1}/${ch?.scenes.length ?? 1}`
-}
-
-// ── ASCII panel ───────────────────────────────────────────────────────────────
-async function loadSceneAscii() {
-  const scene = currentScene()
-  if (!scene) return
-  asciiPanel.textContent = 'generating…'
-  const art = await fetchAiAscii(scene.visualPrompt)
-  asciiPanel.textContent = art
-}
-
-// ── Navigation ────────────────────────────────────────────────────────────────
-function nextScene() {
-  if (!state) return
-  const ch = state.manifest.chapters[state.chapterIndex]
-  if (state.sceneIndex < ch.scenes.length - 1) {
-    state.sceneIndex++
-  } else if (state.chapterIndex < state.manifest.chapters.length - 1) {
-    state.chapterIndex++
-    state.sceneIndex = 0
-  }
-  state.scrollOffset = 0
+// ── State Mutators ────────────────────────────────────────────────────────────
+function updateFontSize(newSize: number) {
+  const size = Math.max(12, Math.min(newSize, 48))
+  config = makeTypographyConfig(size, window.innerWidth, config.theme)
+  saveFontSize(size)
+  layoutCache.clear()
+  if (toolbar) toolbar.setFontSize(size, 12, 48)
   dirty = true
-  loadSceneAscii()
+}
+
+function toggleTheme() {
+  const next: Record<string, 'dark' | 'light' | 'sepia'> = {
+    dark: 'light',
+    light: 'dark',
+    sepia: 'dark'
+  }
+  const newTheme = next[config.theme] || 'dark'
+  config = makeTypographyConfig(config.fontSize, window.innerWidth, newTheme)
+  saveTheme(newTheme)
+  
+  // Update UI
+  document.body.setAttribute('data-theme', newTheme)
+  if (toolbar) toolbar.setTheme(newTheme)
+  
+  dirty = true
+}
+
+function jumpToChapter(idx: number) {
+  if (!manifest || !position) return
+  position.chapterIndex = idx
+  position.sceneIndex = 0
+  position.scrollOffset = 0
+  onSceneChanged()
+}
+
+function jumpToMatch() {
+  if (!manifest || !position || searchState.matches.length === 0) return
+  const m = searchState.matches[searchState.currentIndex]
+  position.chapterIndex = m.chapterIndex
+  position.sceneIndex = m.sceneIndex
+  position.scrollOffset = 0 // ideal: scroll to match
+  onSceneChanged()
+}
+
+function onSceneChanged() {
+  if (!manifest || !position) return
+  savePosition(position)
+  if (toolbar) {
+    toolbar.setChapterTitle(manifest.chapters[position.chapterIndex].title)
+    toolbar.setSearchState(searchState)
+  }
+  spawnEntities()
+  animationDriver.triggerTransition(
+    manifest.chapters[position.chapterIndex].scenes[position.sceneIndex],
+    position.chapterIndex,
+    position.sceneIndex
+  )
+  dirty = true
+}
+
+function spawnEntities() {
+  if (!manifest || !position) return
+  const scene = manifest.chapters[position.chapterIndex].scenes[position.sceneIndex]
+  animationDriver.spawnEntities(scene, config.lineHeight)
+}
+
+// ── Input Handling ────────────────────────────────────────────────────────────
+function handleInput(e: InputEvent) {
+  if (!manifest || !position) return
+
+  switch (e.type) {
+    case 'tap':
+      handleTap(e.x, e.y)
+      break
+    case 'scroll':
+      position.scrollOffset = Math.max(0, position.scrollOffset + e.deltaY)
+      dirty = true
+      savePosition(position)
+      break
+    case 'drag-start': {
+      const idx = findWordIndicesAt(e.x, e.y)
+      if (idx) {
+        selection = { 
+          startLine: idx.lineIdx, 
+          startWordIdx: idx.wordIdx,
+          endLine: idx.lineIdx,
+          endWordIdx: idx.wordIdx
+        }
+        dirty = true
+      }
+      break
+    }
+    case 'drag-move':
+      if (selection) {
+        const idx = findWordIndicesAt(e.x, e.y)
+        if (idx) {
+          selection.endLine = idx.lineIdx
+          selection.endWordIdx = idx.wordIdx
+          dirty = true
+        }
+      }
+      break
+    case 'drag-end':
+      if (selection && (selection.startLine !== selection.endLine || selection.startWordIdx !== selection.endWordIdx)) {
+        handleSelectionLookup()
+      } else {
+        selection = null
+        dirty = true
+      }
+      break
+    case 'key':
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextScene()
+      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prevScene()
+      if (e.key === 'Escape') hideLookupCard()
+      break
+  }
+}
+
+function handleTap(x: number, y: number) {
+  const idx = findWordIndicesAt(x, y)
+  if (!idx) return
+
+  const line = currentLines[idx.lineIdx]
+  const wordObj = line.words[idx.wordIdx]
+  const word = wordObj.word.replace(/[.,!?;:()"]/g, '')
+  if (!word) return
+
+  // Check entity manifest
+  const entity = manifest!.entityManifest?.find(e => e.name.toLowerCase() === word.toLowerCase())
+  
+  showLookupCard({
+    mode: entity ? 'entity' : 'ai-loading',
+    title: word,
+    body: entity?.description,
+    anchorX: x,
+    anchorY: y
+  }, mainCanvas)
+
+  if (!entity) {
+    const scene = manifest!.chapters[position!.chapterIndex].scenes[position!.sceneIndex]
+    lookupTextAI(word, getSentenceAt(scene.text, wordObj.offset))
+  }
+}
+
+async function lookupTextAI(text: string, context?: string) {
+  try {
+    const prompt = context 
+      ? `Define the word "${text}" in the context of this sentence: "${context}". Keep it brief and scholarly.`
+      : `Provide a brief, scholarly definition for the term "${text}".`
+
+    const resp = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'llama3', 
+        prompt,
+        stream: false
+      })
+    })
+    const data = await resp.json()
+    updateLookupCard({ mode: 'ai-result', body: data.response })
+  } catch {
+    updateLookupCard({ mode: 'ai-error' })
+  }
+}
+
+function handleSelectionLookup() {
+  if (!selection || !manifest || !position) return
+  
+  // Extract text from selection
+  let text = ''
+  const startL = Math.min(selection.startLine, selection.endLine)
+  const endL   = Math.max(selection.startLine, selection.endLine)
+
+  for (let li = startL; li <= endL; li++) {
+    const line = currentLines[li]
+    const wStart = (li === selection.startLine) ? selection.startWordIdx : 0
+    const wEnd   = (li === selection.endLine)   ? selection.endWordIdx   : line.words.length - 1
+    
+    // Note: this simple extraction doesn't handle reversed drag perfectly but works for PoC
+    const words = line.words.slice(Math.min(wStart, wEnd), Math.max(wStart, wEnd) + 1)
+    text += words.map(w => w.word).join(' ') + ' '
+  }
+
+  showLookupCard({
+    mode: 'ai-loading',
+    title: 'Selection Lookup',
+    anchorX: window.innerWidth / 2, 
+    anchorY: window.innerHeight / 2
+  }, mainCanvas, () => {
+    selection = null
+    dirty = true
+  })
+
+  lookupTextAI(text.trim())
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function findWordIndicesAt(x: number, y: number): { lineIdx: number; wordIdx: number } | null {
+  const scrolledY = y + position!.scrollOffset
+  const lineIdx = currentLines.findIndex(l => scrolledY >= l.y && scrolledY <= l.y + config.lineHeight)
+  if (lineIdx === -1) return null
+
+  const line = currentLines[lineIdx]
+  const wordIdx = line.words.findIndex(w => x >= line.x + w.x && x <= line.x + w.x + w.w)
+  if (wordIdx === -1) return null
+
+  return { lineIdx, wordIdx }
+}
+
+function getSentenceAt(text: string, offset: number): string {
+  const left = text.lastIndexOf('.', offset) + 1
+  let right = text.indexOf('.', offset)
+  if (right === -1) right = text.length
+  return text.substring(left, right + 1).trim()
+}
+
+function handleSearch(query: string) {
+  if (!manifest) return
+  searchState = searchBook(manifest, query)
+  if (toolbar) toolbar.setSearchState(searchState)
+  if (searchState.matches.length > 0) jumpToMatch()
+}
+
+function nextScene() {
+  if (!manifest || !position) return
+  const ch = manifest.chapters[position.chapterIndex]
+  if (position.sceneIndex < ch.scenes.length - 1) {
+    position.sceneIndex++
+    position.scrollOffset = 0
+    onSceneChanged()
+  } else if (position.chapterIndex < manifest.chapters.length - 1) {
+    position.chapterIndex++
+    position.sceneIndex = 0
+    position.scrollOffset = 0
+    onSceneChanged()
+  }
 }
 
 function prevScene() {
-  if (!state) return
-  if (state.sceneIndex > 0) {
-    state.sceneIndex--
-  } else if (state.chapterIndex > 0) {
-    state.chapterIndex--
-    const ch = state.manifest.chapters[state.chapterIndex]
-    state.sceneIndex = ch.scenes.length - 1
+  if (!manifest || !position) return
+  if (position.sceneIndex > 0) {
+    position.sceneIndex--
+    position.scrollOffset = 0
+    onSceneChanged()
+  } else if (position.chapterIndex > 0) {
+    position.chapterIndex--
+    const ch = manifest.chapters[position.chapterIndex]
+    position.sceneIndex = ch.scenes.length - 1
+    position.scrollOffset = 0
+    onSceneChanged()
   }
-  state.scrollOffset = 0
-  dirty = true
-  loadSceneAscii()
 }
 
-// ── Orb drag ──────────────────────────────────────────────────────────────────
-function getCanvasPos(e: MouseEvent | Touch): { x: number; y: number } {
-  const rect = canvas.getBoundingClientRect()
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+function calculateProgress(): number {
+  if (!manifest || !position) return 0
+  const total = manifest.chapters.reduce((sum, ch) => sum + ch.scenes.length, 0)
+  let done = 0
+  for (let i = 0; i < position.chapterIndex; i++) done += manifest.chapters[i].scenes.length
+  done += position.sceneIndex
+  return done / total
 }
 
-function isOnOrb(x: number, y: number): boolean {
-  if (!state) return false
-  const { orb } = state
-  const dx = x - orb.x, dy = y - orb.y
-  return Math.sqrt(dx * dx + dy * dy) <= orb.radius + 10
+function updateSceneInfo() {
+  if (!manifest || !position) return
+  const ch = manifest.chapters[position.chapterIndex]
+  sceneInfoEl.textContent = `Scene ${position.sceneIndex + 1} of ${ch.scenes.length}`
 }
-
-canvas.addEventListener('mousedown', e => {
-  if (!state) return
-  const pos = getCanvasPos(e)
-  if (isOnOrb(pos.x, pos.y)) {
-    state.orb.dragging = true
-    canvas.style.cursor = 'grabbing'
-  }
-})
-
-canvas.addEventListener('mousemove', e => {
-  if (!state) return
-  const pos = getCanvasPos(e)
-  if (state.orb.dragging) {
-    state.orb.x = pos.x
-    state.orb.y = pos.y
-    dirty = true
-  } else {
-    canvas.style.cursor = isOnOrb(pos.x, pos.y) ? 'grab' : 'crosshair'
-  }
-})
-
-canvas.addEventListener('mouseup', () => {
-  if (!state) return
-  state.orb.dragging = false
-  canvas.style.cursor = 'crosshair'
-})
-
-// Touch support for tablets
-canvas.addEventListener('touchstart', e => {
-  if (!state) return
-  const t = e.touches[0]
-  const pos = getCanvasPos(t)
-  if (isOnOrb(pos.x, pos.y)) {
-    state.orb.dragging = true
-    e.preventDefault()
-  }
-}, { passive: false })
-
-canvas.addEventListener('touchmove', e => {
-  if (!state?.orb.dragging) return
-  const t = e.touches[0]
-  const pos = getCanvasPos(t)
-  state.orb.x = pos.x
-  state.orb.y = pos.y
-  dirty = true
-  e.preventDefault()
-}, { passive: false })
-
-canvas.addEventListener('touchend', () => {
-  if (state) state.orb.dragging = false
-})
-
-// ── Scroll / swipe ────────────────────────────────────────────────────────────
-canvas.addEventListener('wheel', e => {
-  if (!state) return
-  state.scrollOffset = Math.max(0, state.scrollOffset + e.deltaY)
-  dirty = true
-  e.preventDefault()
-}, { passive: false })
-
-// Keyboard navigation
-window.addEventListener('keydown', e => {
-  if (!state) return
-  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextScene()
-  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prevScene()
-  if (e.key === 'Escape') hideMarginalia(marginalia)
-})
-
-// ── Entity tap (click on canvas — detect word under cursor) ──────────────────
-// Simple approach: check if click is near a known entity name in current scene
-canvas.addEventListener('click', e => {
-  if (!state) return
-  const scene = currentScene()
-  if (!scene || state.orb.dragging) return
-
-  // We don't have per-word coordinates from pretext in this simple integration,
-  // so we show a random entity on click as a PoC trigger.
-  // A full implementation would use layoutWithLines to map click → word.
-  const entities = scene.entities
-  if (entities.length === 0) return
-
-  const entity = entities[Math.floor(Math.random() * entities.length)]
-  showMarginalia(entity, scene.text, state.manifest.title, marginalia, margContent)
-})
-
-// ── Button handlers ───────────────────────────────────────────────────────────
-btnBack.addEventListener('click', closeBook)
-
-btnAscii.addEventListener('click', () => {
-  if (!state) return
-  state.asciiVisible = !state.asciiVisible
-  asciiPanel.classList.toggle('hidden', !state.asciiVisible)
-})
-
-margClose.addEventListener('click', () => hideMarginalia(marginalia))
-
-// ── Resize ────────────────────────────────────────────────────────────────────
-const ro = new ResizeObserver(() => {
-  if (!state) return
-  resizeCanvas(canvas)
-  dirty = true
-})
-ro.observe(canvas)
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init()

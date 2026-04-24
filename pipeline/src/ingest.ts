@@ -14,8 +14,8 @@ import {
   splitChapters,
   splitScenes
 } from './gutenberg.js'
-import { annotateScene } from './ai.js'
-import type { BookManifest, BookChapter, BookScene } from '../../reader/src/types.js'
+import { annotateScene, generateEntityDescription } from './ai.js'
+import type { BookManifest, BookChapter, BookScene, EntityEntry } from '../../reader/src/types.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = join(__dirname, '../../reader/public/books')
@@ -59,31 +59,38 @@ async function main() {
     for (const [si, sceneText] of scenes.entries()) {
       process.stdout.write(`    Scene ${si + 1}/${scenes.length} annotating… `)
       const annotation = await annotateScene(sceneText)
-      console.log(`[${annotation.mood}]`)
+      console.log(`[${annotation.mood} | ${annotation.transitionStyle}]`)
 
       annotatedScenes.push({
         id: `${bookId}-${ci}-${si}`,
         text: sceneText,
         mood: annotation.mood,
         visualPrompt: annotation.visualPrompt,
-        entities: annotation.entities
+        entities: annotation.entities,
+        animationHints: annotation
       })
       sceneCount++
 
       // Small delay to avoid hammering Ollama
-      await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 100))
     }
 
     chapters.push({ title: ch.title, scenes: annotatedScenes })
   }
 
-  // 5. Write manifest
+  // 5. Build Entity Manifest
+  console.log('\n👤 Building Entity Manifest…')
+  const entityManifest = await buildEntityManifest(chapters)
+  console.log(`   Found ${entityManifest.length} unique entities.`)
+
+  // 6. Write manifest
   const manifest: BookManifest = {
     id: bookId,
     title: meta.title,
     author: meta.author,
     emoji: meta.emoji,
-    chapters
+    chapters,
+    entityManifest
   }
 
   mkdirSync(OUT_DIR, { recursive: true })
@@ -92,6 +99,50 @@ async function main() {
 
   console.log(`\n✅ Done! ${sceneCount} scenes written to:`)
   console.log(`   ${outPath}\n`)
+}
+
+async function buildEntityManifest(chapters: BookChapter[]): Promise<EntityEntry[]> {
+  const entityMap = new Map<string, { firstSeenScene: string; context: string }>()
+
+  // Collect all unique entities
+  for (const ch of chapters) {
+    for (const scene of ch.scenes) {
+      for (const ent of scene.entities) {
+        if (!entityMap.has(ent)) {
+          entityMap.set(ent, { 
+            firstSeenScene: scene.id,
+            context: scene.text
+          })
+        }
+      }
+    }
+  }
+
+  const manifest: EntityEntry[] = []
+  const entities = Array.from(entityMap.entries())
+
+  for (let i = 0; i < entities.length; i++) {
+    const [name, data] = entities[i]
+    process.stdout.write(`   [${i + 1}/${entities.length}] Describing ${name}… `)
+    
+    try {
+      const description = await generateEntityDescription(name, data.context)
+      manifest.push({
+        name,
+        type: 'character', // Defaulting to character for now, AI could determine this but keeping it simple
+        description,
+        firstSeenScene: data.firstSeenScene
+      })
+      console.log('done.')
+    } catch (e) {
+      console.log('failed (skipping).')
+    }
+
+    // Small delay
+    await new Promise(r => setTimeout(r, 200))
+  }
+
+  return manifest
 }
 
 main().catch(err => {

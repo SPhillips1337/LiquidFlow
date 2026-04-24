@@ -1,9 +1,14 @@
 // ── Ollama AI client ─────────────────────────────────────────────────────────
-// Targets the remote Cloudflare-tunnelled Ollama instance.
+// Config is read from Vite env vars (set in reader/.env, never committed).
+// See reader/.env.example for the required variables.
 
-const OLLAMA_BASE = 'https://knights-ventures-venice-sbjct.trycloudflare.com'
-const FAST_MODEL  = 'granite4:3b'   // quick tasks: mood, entities
-const MAIN_MODEL  = 'lfm2:latest'   // lore cards, richer generation
+const OLLAMA_BASE = import.meta.env.VITE_OLLAMA_BASE_URL as string
+const FAST_MODEL  = import.meta.env.VITE_OLLAMA_FAST_MODEL as string  // quick tasks: mood, entities
+const MAIN_MODEL  = import.meta.env.VITE_OLLAMA_MAIN_MODEL as string  // lore cards, richer generation
+
+if (!OLLAMA_BASE) {
+  console.warn('[LiquidFlow] VITE_OLLAMA_BASE_URL is not set. Copy reader/.env.example to reader/.env and configure it.')
+}
 
 async function ollamaChat(
   model: string,

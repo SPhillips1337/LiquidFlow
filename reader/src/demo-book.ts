@@ -5,6 +5,26 @@ export const DEMO_MANIFEST: BookManifest = {
   title: 'The Time Machine',
   author: 'H.G. Wells',
   emoji: '⏱',
+  entityManifest: [
+    {
+      name: 'Time Traveller',
+      type: 'character',
+      description: 'The protagonist, a scientist and inventor who travels through time.',
+      firstSeenScene: 'demo-1-1'
+    },
+    {
+      name: 'Filby',
+      type: 'character',
+      description: 'An argumentative person with red hair, one of the guests at the dinner party.',
+      firstSeenScene: 'demo-1-1'
+    },
+    {
+      name: 'Weena',
+      type: 'character',
+      description: 'A member of the Eloi whom the Time Traveller saves from drowning.',
+      firstSeenScene: 'demo-1-1'
+    }
+  ],
   chapters: [
     {
       title: 'Chapter I — Introduction',
@@ -14,6 +34,12 @@ export const DEMO_MANIFEST: BookManifest = {
           mood: 'curious',
           visualPrompt: 'Victorian laboratory cluttered with brass instruments and glowing dials',
           entities: ['Time Traveller', 'Filby', 'Weena'],
+          animationHints: {
+            mood: 'neutral',
+            visualPrompt: 'A warm Victorian study with glowing coals',
+            entities: ['Time Traveller', 'Filby'],
+            transitionStyle: 'particle-drift'
+          },
           text: `The Time Traveller (for so it will be convenient to speak of him) was expounding a recondite matter to us. His grey eyes shone and twinkled, and his usually pale face was flushed and animated. The fire burned brightly, and the soft radiance of the incandescent lights in the lilies of silver caught the bubbles that flashed and passed in our glasses.
 
 Our chairs, being his patents, embraced and caressed us rather than submitted to be sat upon, and there was that luxurious after-dinner atmosphere when thought roams gracefully free of the trammels of precision.
@@ -27,6 +53,12 @@ Our chairs, being his patents, embraced and caressed us rather than submitted to
           mood: 'wonder',
           visualPrompt: 'Spinning brass and crystal time machine dissolving into blurred light',
           entities: ['Time Traveller', 'Machine', 'Laboratory'],
+          animationHints: {
+            mood: 'wonder',
+            visualPrompt: 'Glinting brass and crystal mechanisms',
+            entities: ['Machine', 'Laboratory'],
+            transitionStyle: 'fluid-smoke'
+          },
           text: `"Clearly," the Time Traveller proceeded, "any real body must have extension in four directions: it must have Length, Breadth, Thickness, and — Duration. But through a natural infirmity of the flesh, which I will explain to you in a moment, we incline to overlook this fact. There are really four dimensions, three which we call the three planes of Space, and a fourth, Time."
 
 He took one of the small octagonal tables that were scattered about the room, and set it in front of the fire, with two legs on the hearthrug. On this table he placed the mechanism. It was a glittering metallic framework, scarcely larger than a small clock, and very delicately made. There was ivory in it, and some transparent crystalline substance.
@@ -43,6 +75,12 @@ The thing the Time Traveller held in his hands was a glittering metallic framewo
           mood: 'ominous',
           visualPrompt: 'Vast green landscape under a dying red sun, crumbling stone ruins',
           entities: ['Eloi', 'Morlocks', 'Palace of Green Porcelain'],
+          animationHints: {
+            mood: 'tense',
+            visualPrompt: 'Flickering night and day, blurred sun',
+            entities: ['Eloi', 'Morlocks'],
+            transitionStyle: 'typographic-ascii'
+          },
           text: `I am afraid I cannot convey the peculiar sensations of time travelling. They are excessively unpleasant. There is a feeling exactly like that one has upon a switchback — of a helpless headlong motion! I felt the same horrible anticipation, too, of an imminent smash. As I put on pace, night followed day like the flapping of a black wing. The dim suggestion of the laboratory seemed presently to fall away from me, and I saw the sun hopping swiftly across the sky, leaping it every minute, and every minute marking a day.
 
 I suppose the next thing was the slowness of my sensations. I seemed to be hurrying onward upon a sort of switchback railway, and the night and day were but a flicker of light and darkness. Then, in the intermittent darknesses, I saw the moon spinning swiftly through her quarters from new to full, and had a faint glimpse of the circling stars.
