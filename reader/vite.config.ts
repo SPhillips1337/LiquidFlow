@@ -1,22 +1,26 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { exec } from 'child_process'
 import { unlinkSync } from 'fs'
 import { join } from 'path'
 
-export default defineConfig({
-  server: { 
-    port: 5173,
-    proxy: {
-      '/api/ollama': {
-        target: 'http://127.0.0.1:11434',
-        changeOrigin: true,
-        secure: false,
-        proxyTimeout: 60000,
-        timeout: 60000,
-        rewrite: (path) => path.replace(/^\/api\/ollama/, '/api/generate')
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, join(process.cwd(), '..'), '')
+  const ollamaBase = env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
+
+  return {
+    server: { 
+      port: 5173,
+      proxy: {
+        '/api/ollama': {
+          target: ollamaBase,
+          changeOrigin: true,
+          secure: false,
+          proxyTimeout: 60000,
+          timeout: 60000,
+          rewrite: (path) => path.replace(/^\/api\/ollama/, '')
+        }
       }
-    }
-  },
+    },
   plugins: [
     {
       name: 'book-management',
@@ -61,4 +65,5 @@ export default defineConfig({
     }
   ],
   build: { target: 'es2022' }
+  }
 })

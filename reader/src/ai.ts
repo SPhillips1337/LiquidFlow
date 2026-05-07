@@ -1,16 +1,32 @@
-// ── Ollama AI client ─────────────────────────────────────────────────────────
+// ── AI client ────────────────────────────────────────────────────────────────
+// Supports Ollama and OpenAI-compatible endpoints (LM Studio, etc).
 // Config is read from Vite env vars (set in reader/.env, never committed).
 // See reader/.env.example for the required variables.
 
-const OLLAMA_BASE = import.meta.env.VITE_OLLAMA_BASE_URL as string
-const FAST_MODEL  = import.meta.env.VITE_OLLAMA_FAST_MODEL as string  // quick tasks: mood, entities
-const MAIN_MODEL  = import.meta.env.VITE_OLLAMA_MAIN_MODEL as string  // lore cards, richer generation
+const AI_BASE     = (import.meta.env.VITE_AI_BASE_URL || import.meta.env.VITE_OLLAMA_BASE_URL || '/api/ollama') as string
+const AI_FORMAT   = (import.meta.env.VITE_AI_FORMAT || 'ollama') as 'ollama' | 'openai'
+const FAST_MODEL  = (import.meta.env.VITE_AI_FAST_MODEL || import.meta.env.VITE_OLLAMA_FAST_MODEL || '') as string
+const MAIN_MODEL  = (import.meta.env.VITE_AI_MAIN_MODEL || import.meta.env.VITE_OLLAMA_MAIN_MODEL || '') as string
+const FALLBACK_MODEL = 'llama3.2'
 
-if (!OLLAMA_BASE) {
-  console.warn('[LiquidFlow] VITE_OLLAMA_BASE_URL is not set. Copy reader/.env.example to reader/.env and configure it.')
+export function getDefaultModel(): string {
+  const main = import.meta.env.VITE_AI_MAIN_MODEL || import.meta.env.VITE_OLLAMA_MAIN_MODEL
+  const fast = import.meta.env.VITE_AI_FAST_MODEL || import.meta.env.VITE_OLLAMA_FAST_MODEL
+  return (main || fast || FALLBACK_MODEL || 'google/gemma-4-e2b').trim()
 }
 
-async function ollamaChat(
+if (!AI_BASE) {
+  console.warn('[LiquidFlow] VITE_AI_BASE_URL is not set. Copy reader/.env.example to reader/.env and configure it.')
+}
+
+console.log('[LiquidFlow AI Config]', {
+  AI_BASE,
+  AI_FORMAT,
+  MAIN_MODEL,
+  FAST_MODEL
+})
+
+export async function ollamaChat(
   model: string,
   prompt: string,
   system?: string,
@@ -20,16 +36,37 @@ async function ollamaChat(
   if (system) messages.push({ role: 'system', content: system })
   messages.push({ role: 'user', content: prompt })
 
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
+  let url: string
+  let body: Record<string, unknown>
+
+  if (AI_FORMAT === 'openai') {
+    url = `${AI_BASE.replace(/\/+$/, '')}/chat/completions`
+    body = { model, messages, stream: false }
+  } else {
+    url = `${AI_BASE.replace(/\/+$/, '')}/api/chat`
+    body = { model, messages, stream: false }
+  }
+
+  console.log(`[AI Request] ${url}`, body)
+  
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: false }),
+    body: JSON.stringify(body),
     signal
   })
 
-  if (!res.ok) throw new Error(`Ollama error: ${res.status}`)
-  const data = await res.json() as { message: { content: string } }
-  return data.message.content.trim()
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`AI error ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  const data = await res.json()
+
+  if (AI_FORMAT === 'openai') {
+    return (data as any).choices?.[0]?.message?.content?.trim() ?? ''
+  }
+  return (data as { message: { content: string } }).message.content.trim()
 }
 
 // ── Scene annotation (called during ingestion / lazy load) ──────────────────

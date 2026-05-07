@@ -11,6 +11,7 @@ export interface ToolbarCallbacks {
   onSearchNext(): void
   onSearchPrev(): void
   onSearchClose(): void
+  onAICompanionToggle(): void
   onChapterSelect(chapterIndex: number): void
   onChapterNext(): void
   onChapterPrev(): void
@@ -48,6 +49,7 @@ export function createToolbar(
       <button class="tb-btn tb-font-inc" aria-label="Increase font size">A+</button>
       <button class="tb-btn tb-theme" aria-label="Toggle light/dark mode">☀️</button>
       <button class="tb-btn tb-settings" aria-label="Settings">⚙️</button>
+      <button class="tb-btn tb-ai" aria-label="AI Companion">✦</button>
       <button class="tb-btn tb-search" aria-label="Search">🔍</button>
       <button class="tb-btn tb-chapters" aria-label="Chapter list">≡</button>
     </div>
@@ -87,6 +89,7 @@ export function createToolbar(
   const settingsBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-settings')!
   const searchBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-search')!
   const chaptersBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-chapters')!
+  const aiBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-ai')!
   const backBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-back')!
   const chapterPrevBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-chapter-prev')!
   const chapterNextBtn = toolbarEl.querySelector<HTMLButtonElement>('.tb-chapter-next')!
@@ -148,6 +151,8 @@ function handleChapterNext(e: Event) {
   function handleFontInc() { callbacks.onFontIncrease() }
   function handleThemeToggle() { callbacks.onThemeToggle() }
   function handleSettingsClick() { callbacks.onSettingsClick() }
+
+  function handleAIToggle() { callbacks.onAICompanionToggle() }
 
   function handleSearchToggle() {
     if (searchOverlay.classList.contains('hidden')) {
@@ -214,6 +219,7 @@ function handleChapterNext(e: Event) {
   fontIncBtn.addEventListener('click', handleFontInc)
   themeBtn.addEventListener('click', handleThemeToggle)
   settingsBtn.addEventListener('click', handleSettingsClick)
+  aiBtn.addEventListener('click', handleAIToggle)
   searchBtn.addEventListener('click', handleSearchToggle)
   chaptersBtn.addEventListener('click', handleChaptersToggle)
   toolbarCenter.addEventListener('click', handleChaptersToggle)
@@ -261,6 +267,7 @@ function handleChapterNext(e: Event) {
     },
 
     destroy() {
+      aiBtn.removeEventListener('click', handleAIToggle)
       backBtn.removeEventListener('click', handleBack)
       fontDecBtn.removeEventListener('click', handleFontDec)
       fontIncBtn.removeEventListener('click', handleFontInc)

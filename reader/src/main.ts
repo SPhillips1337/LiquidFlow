@@ -26,6 +26,8 @@ import {
   DEFAULT_FONT_SIZE
 } from './persistence'
 import { renderTransition } from './transition'
+import { createAICompanion } from './ai-companion'
+import { ollamaChat, getDefaultModel } from './ai'
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const shelfView         = document.getElementById('shelf')!
@@ -51,6 +53,7 @@ let mouseX = 0
 let mouseY = 0
 
 let toolbar: ReturnType<typeof createToolbar> | null = null
+let aiCompanion: ReturnType<typeof createAICompanion> | null = null
 let inputDetach: (() => void) | null = null
 let currentLines: LayoutLine[] = []
 let dirty = true
@@ -106,6 +109,12 @@ function openBook(book: BookManifest) {
     onSearchNext: () => { searchState = nextMatch(searchState); jumpToMatch(); },
     onSearchPrev: () => { searchState = prevMatch(searchState); jumpToMatch(); },
     onSearchClose: () => { searchState = emptySearchState(); dirty = true; },
+    onAICompanionToggle: () => { 
+      if (aiCompanion) {
+        aiCompanion.toggle()
+        initChapterNav()
+      }
+    },
     onChapterSelect: (idx) => jumpToChapter(idx),
     onChapterNext: nextChapter,
     onChapterPrev: prevChapter
@@ -114,6 +123,15 @@ function openBook(book: BookManifest) {
   toolbar.setTheme(config.theme)
   toolbar.setChapterTitle(book.chapters[position.chapterIndex].title)
   toolbar.setChapterNav(position.chapterIndex > 0, position.chapterIndex < book.chapters.length - 1)
+
+  // Create AI Companion panel
+  aiCompanion = createAICompanion(readerView, book, {
+    getChapterText: () => getChapterText(),
+    getBookTitle: () => book.title,
+    getBookAuthor: () => book.author,
+    getChapterIndex: () => position?.chapterIndex ?? 0,
+    onClose: () => initChapterNav()
+  })
   
   // Sync body class for UI theme
   document.body.setAttribute('data-theme', config.theme)
@@ -121,8 +139,9 @@ function openBook(book: BookManifest) {
   // Attach input
   inputDetach = attachInputRouter(mainCanvas, handleInput)
 
-  // Bootstrap entities for current scene
-  spawnEntities()
+  // Bootstrap entities for current scene — disabled: entity obstacles cause text wobble with pretext reflow
+  // spawnEntities()
+  updateProgress()
 
   // Initialize interactive scrubber
   initScrubber()
@@ -134,14 +153,22 @@ function openBook(book: BookManifest) {
   startLoop()
 }
 
+function getChapterText(): string {
+  if (!manifest || !position) return ''
+  const ch = manifest.chapters[position.chapterIndex]
+  return ch.scenes.map(s => s.text).join('\n\n')
+}
+
 function closeBook() {
   cancelAnimationFrame(rafId)
   if (toolbar) toolbar.destroy()
+  if (aiCompanion) aiCompanion.destroy()
   if (inputDetach) inputDetach()
   
   manifest = null
   position = null
   toolbar = null
+  aiCompanion = null
   inputDetach = null
   
   readerView.classList.remove('active')
@@ -170,7 +197,7 @@ function initChapterNav() {
     inner.appendChild(item)
   })
 
-  const show = window.innerWidth >= 900
+  const show = window.innerWidth >= 900 && (!aiCompanion || !aiCompanion.isVisible())
   nav.classList.toggle('hidden', !show)
 }
 
@@ -279,7 +306,8 @@ function onSceneChanged() {
     toolbar.setChapterTitle(manifest.chapters[position.chapterIndex].title)
     toolbar.setSearchState(searchState)
   }
-  spawnEntities()
+  // spawnEntities() — disabled: entity obstacles cause text wobble with pretext reflow
+  updateProgress()
   animationDriver.triggerTransition(
     manifest.chapters[position.chapterIndex].scenes[position.sceneIndex],
     position.chapterIndex,
@@ -308,12 +336,8 @@ function updateChapterNavHighlight() {
   })
 }
 
-function spawnEntities() {
+function updateProgress() {
   if (!manifest || !position) return
-  const scene = manifest.chapters[position.chapterIndex].scenes[position.sceneIndex]
-  animationDriver.spawnEntities(scene, config.lineHeight)
-  
-  // Update progress bar
   const total = manifest.chapters.length
   const current = position.chapterIndex + (position.sceneIndex / manifest.chapters[position.chapterIndex].scenes.length)
   const fraction = current / total
@@ -458,26 +482,12 @@ async function lookupTextAI(text: string, context?: string, retryCount = 0) {
       ? `Define the word "${text}" in the context of this sentence: "${context}". Keep it brief and scholarly.`
       : `Provide a brief, scholarly definition for the term "${text}".`
 
-    console.log(`[AI Lookup] Fetching /api/ollama...`)
-    const resp = await fetch('/api/ollama', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: 'llama3:latest', 
-        prompt,
-        stream: false
-      })
-    })
-    
-    if (!resp.ok) {
-      throw new Error(`Ollama returned ${resp.status}: ${resp.statusText}`)
-    }
+    console.log(`[AI Lookup] Requesting AI definition for: "${text}"`)
+    const response = await ollamaChat(getDefaultModel(), prompt, undefined, controller.signal)
 
     clearTimeout(timeoutId)
-    const data = await resp.json()
-    console.log(`[AI Lookup] Success! Response length: ${data.response?.length}`)
-    updateLookupCard({ mode: 'ai-result', body: data.response })
+    console.log(`[AI Lookup] Success! Response length: ${response.length}`)
+    updateLookupCard({ mode: 'ai-result', body: response })
   } catch (err: any) {
     clearTimeout(timeoutId)
     console.error(`[AI Lookup] Error:`, err)
@@ -491,7 +501,7 @@ async function lookupTextAI(text: string, context?: string, retryCount = 0) {
     
     updateLookupCard({ 
       mode: 'ai-error', 
-      body: isTimeout ? 'Lookup timed out — Ollama might be busy' : `Error: ${err.message}`
+      body: isTimeout ? 'Lookup timed out — AI might be busy' : `Error: ${err.message}`
     })
   }
 }

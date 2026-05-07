@@ -29,11 +29,40 @@ function loadDotenv() {
 loadDotenv()
 
 const OLLAMA_BASE = process.env['OLLAMA_BASE_URL'] ?? ''
+const AI_FORMAT   = (process.env['AI_FORMAT'] || 'ollama') as 'ollama' | 'openai'
 const FAST_MODEL  = process.env['OLLAMA_FAST_MODEL'] ?? 'granite4:3b'
 const MAIN_MODEL  = process.env['OLLAMA_MAIN_MODEL'] ?? 'llama3'
 
 if (!OLLAMA_BASE) {
-  console.warn('[pipeline] OLLAMA_BASE_URL is not set. Copy pipeline/.env.example to pipeline/.env and configure it.')
+  console.warn('[pipeline] OLLAMA_BASE_URL is not set. Configure it in pipeline/.env')
+}
+
+async function requestAI(model: string, messages: any[]): Promise<string> {
+  const url = AI_FORMAT === 'openai' 
+    ? `${OLLAMA_BASE.replace(/\/+$/, '')}/v1/chat/completions`
+    : `${OLLAMA_BASE.replace(/\/+$/, '')}/api/chat`
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false
+    })
+  })
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`AI error ${res.status}: ${errText.slice(0, 200)}`)
+  }
+
+  const data = await res.json()
+  if (AI_FORMAT === 'openai') {
+    return (data as any).choices?.[0]?.message?.content ?? ''
+  } else {
+    return (data as { message: { content: string } }).message.content
+  }
 }
 
 export interface SceneAnnotation {
@@ -51,17 +80,12 @@ export const DEFAULT_ANNOTATION: SceneAnnotation = {
 }
 
 export async function annotateScene(text: string): Promise<SceneAnnotation> {
-  const snippet = text.slice(0, 1000) // Increase snippet size for better context
+  const snippet = text.slice(0, 1000)
 
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: FAST_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: `Analyse this passage. Respond with ONLY valid JSON (no markdown):
+  const raw = await requestAI(FAST_MODEL, [
+    {
+      role: 'user',
+      content: `Analyse this passage. Respond with ONLY valid JSON (no markdown):
 {
   "mood": "<one word: tense|melancholic|wonder|ominous|joyful|neutral>",
   "visualPrompt": "<15 words max, descriptive visual scene>",
@@ -71,18 +95,13 @@ export async function annotateScene(text: string): Promise<SceneAnnotation> {
 
 Passage:
 ${snippet}`
-        }
-      ],
-      stream: false
-    })
-  })
+    }
+  ])
 
-  if (!res.ok) throw new Error(`Ollama ${res.status}`)
-  const data = await res.json() as { message: { content: string } }
-  const raw = data.message.content.replace(/```json?|```/g, '').trim()
+  const cleaned = raw.replace(/```json?|```/g, '').trim()
 
   try {
-    const parsed = JSON.parse(raw) as SceneAnnotation
+    const parsed = JSON.parse(cleaned) as SceneAnnotation
     // Validate transitionStyle
     if (!['fluid-smoke', 'typographic-ascii', 'particle-drift'].includes(parsed.transitionStyle)) {
       parsed.transitionStyle = 'particle-drift'
@@ -97,23 +116,11 @@ export async function generateEntityDescription(
   name: string,
   contextText: string
 ): Promise<string> {
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: MAIN_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: `Based on this passage, provide a brief (max 30 words) description of the entity "${name}". 
+  return requestAI(MAIN_MODEL, [
+    {
+      role: 'user',
+      content: `Based on this passage, provide a brief (max 30 words) description of the entity "${name}". 
 Passage: ${contextText.slice(0, 800)}`
-        }
-      ],
-      stream: false
-    })
-  })
-
-  if (!res.ok) throw new Error(`Ollama ${res.status}`)
-  const data = await res.json() as { message: { content: string } }
-  return data.message.content.trim()
+    }
+  ])
 }
