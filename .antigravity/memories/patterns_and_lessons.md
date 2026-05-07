@@ -1,7 +1,7 @@
 # Patterns & Lessons Learned
 
 ## 🔴 Failure: The "Half-Baked" Renderer Update
-- **Context**: During the Kindle Plus redesign, the `renderer.ts` module was completely rewritten to a new API (`TypographyRenderer`), but the `main.ts` shell was not updated simultaneously.
+- **Context**: During the ai enhanced ebook reader redesign, the `renderer.ts` module was completely rewritten to a new API (`TypographyRenderer`), but the `main.ts` shell was not updated simultaneously.
 - **Impact**: The application became non-functional as `main.ts` attempted to call `renderScene` with the old signature, causing type errors and runtime failures.
 - **Lesson**: When refactoring core module interfaces, prioritize a "Vertical Slice" approach where the shell and renderer are updated in the same task to maintain a working build. Avoid leaving the core loop broken between tasks.
 

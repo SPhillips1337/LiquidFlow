@@ -1,4 +1,4 @@
-# LiquidFlow: Kindle Plus Project Status & Roadmap
+# LiquidFlow: ai enhanced ebook reader Project Status & Roadmap
 **Handover Document for AI Systems**
 
 ---

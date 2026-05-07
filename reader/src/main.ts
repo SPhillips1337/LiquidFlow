@@ -1,12 +1,12 @@
-// ── LiquidFlow Reader — Kindle Plus App Shell ──────────────────────────────────
+// ── LiquidFlow Reader — ai enhanced ebook reader App Shell ──────────────────────────────────
 import './style.css'
-import type { 
-  BookManifest, 
-  ReadingPosition, 
-  TypographyConfig, 
-  SearchState, 
-  LayoutLine, 
-  SelectionState 
+import type {
+  BookManifest,
+  ReadingPosition,
+  TypographyConfig,
+  SearchState,
+  LayoutLine,
+  SelectionState
 } from './types'
 import { loadShelf, renderShelf } from './shelf'
 import { renderScene, resizeCanvas } from './renderer'
@@ -16,12 +16,12 @@ import { createToolbar } from './toolbar'
 import { attachInputRouter, type InputEvent } from './input'
 import { showLookupCard, updateLookupCard, hideLookupCard } from './lookup-card'
 import { searchBook, nextMatch, prevMatch, emptySearchState } from './search'
-import { 
-  savePosition, 
-  loadPosition, 
-  saveFontSize, 
-  loadFontSize, 
-  saveTheme, 
+import {
+  savePosition,
+  loadPosition,
+  saveFontSize,
+  loadFontSize,
+  saveTheme,
   loadTheme,
   DEFAULT_FONT_SIZE
 } from './persistence'
@@ -30,18 +30,18 @@ import { createAICompanion } from './ai-companion'
 import { ollamaChat, getDefaultModel } from './ai'
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const shelfView         = document.getElementById('shelf')!
-const readerView        = document.getElementById('reader-view')!
-const bookGrid          = document.getElementById('book-grid')!
-const mainCanvas        = document.getElementById('reader-canvas') as HTMLCanvasElement
-const transitionCanvas  = document.getElementById('transition-canvas') as HTMLCanvasElement
-const sceneInfoEl       = document.getElementById('scene-info')!
-const progressBar       = document.getElementById('progress-bar')!
-const progressFill       = document.getElementById('progress-fill')!
+const shelfView = document.getElementById('shelf')!
+const readerView = document.getElementById('reader-view')!
+const bookGrid = document.getElementById('book-grid')!
+const mainCanvas = document.getElementById('reader-canvas') as HTMLCanvasElement
+const transitionCanvas = document.getElementById('transition-canvas') as HTMLCanvasElement
+const sceneInfoEl = document.getElementById('scene-info')!
+const progressBar = document.getElementById('progress-bar')!
+const progressFill = document.getElementById('progress-fill')!
 
 // ── Core Engines ──────────────────────────────────────────────────────────────
 const animationDriver = new AnimationDriver()
-const layoutCache     = new LayoutCache()
+const layoutCache = new LayoutCache()
 
 // ── App State ─────────────────────────────────────────────────────────────────
 let manifest: BookManifest | null = null
@@ -79,7 +79,7 @@ async function init() {
 
 function openBook(book: BookManifest) {
   manifest = book
-  
+
   // Load or init position
   const saved = loadPosition(book.id)
   position = saved || {
@@ -92,7 +92,7 @@ function openBook(book: BookManifest) {
   // Sync UI
   shelfView.classList.remove('active')
   readerView.classList.add('active')
-  
+
   resizeCanvas(mainCanvas)
   resizeCanvas(transitionCanvas)
   animationDriver.setCanvasSize(mainCanvas.width, mainCanvas.height)
@@ -109,7 +109,7 @@ function openBook(book: BookManifest) {
     onSearchNext: () => { searchState = nextMatch(searchState); jumpToMatch(); },
     onSearchPrev: () => { searchState = prevMatch(searchState); jumpToMatch(); },
     onSearchClose: () => { searchState = emptySearchState(); dirty = true; },
-    onAICompanionToggle: () => { 
+    onAICompanionToggle: () => {
       if (aiCompanion) {
         aiCompanion.toggle()
         initChapterNav()
@@ -132,7 +132,7 @@ function openBook(book: BookManifest) {
     getChapterIndex: () => position?.chapterIndex ?? 0,
     onClose: () => initChapterNav()
   })
-  
+
   // Sync body class for UI theme
   document.body.setAttribute('data-theme', config.theme)
 
@@ -164,13 +164,13 @@ function closeBook() {
   if (toolbar) toolbar.destroy()
   if (aiCompanion) aiCompanion.destroy()
   if (inputDetach) inputDetach()
-  
+
   manifest = null
   position = null
   toolbar = null
   aiCompanion = null
   inputDetach = null
-  
+
   readerView.classList.remove('active')
   shelfView.classList.add('active')
 
@@ -204,10 +204,10 @@ function initChapterNav() {
 // ── Main Loop ─────────────────────────────────────────────────────────────────
 function startLoop() {
   lastTime = performance.now()
-  
+
   function loop(now: number) {
     if (!manifest || !position) return
-    
+
     const dt = now - lastTime
     lastTime = now
 
@@ -229,7 +229,7 @@ function startLoop() {
       const scene = manifest.chapters[position.chapterIndex].scenes[position.sceneIndex]
       const obstacles = animationDriver.getEntityObstacles()
       const currentMatch = searchState.matches.length > 0 ? searchState.matches[searchState.currentIndex] : null
-      
+
       currentLines = renderScene(
         mainCanvas,
         scene,
@@ -243,7 +243,7 @@ function startLoop() {
         mouseX,
         mouseY
       )
-      
+
       updateSceneInfo()
       if (toolbar) toolbar.setProgress(calculateProgress())
       dirty = false
@@ -251,7 +251,7 @@ function startLoop() {
 
     rafId = requestAnimationFrame(loop)
   }
-  
+
   rafId = requestAnimationFrame(loop)
 }
 
@@ -274,11 +274,11 @@ function toggleTheme() {
   const newTheme = next[config.theme] || 'dark'
   config = makeTypographyConfig(config.fontSize, window.innerWidth, newTheme)
   saveTheme(newTheme)
-  
+
   // Update UI
   document.body.setAttribute('data-theme', newTheme)
   if (toolbar) toolbar.setTheme(newTheme)
-  
+
   dirty = true
 }
 
@@ -355,11 +355,11 @@ function initScrubber() {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
     const fraction = x / rect.width
-    
+
     // Jump to chapter
     const totalChapters = manifest.chapters.length
     const targetChapter = Math.min(totalChapters - 1, Math.floor(fraction * totalChapters))
-    
+
     if (position && (position.chapterIndex !== targetChapter)) {
       position.chapterIndex = targetChapter
       position.sceneIndex = 0
@@ -396,18 +396,18 @@ function handleInput(e: InputEvent) {
       break
     case 'scroll':
       position.scrollOffset = Math.max(0, position.scrollOffset + e.deltaY)
-      
+
       // Check for auto-chapter navigation at boundaries
       checkAutoChapterNav()
-      
+
       dirty = true
       savePosition(position)
       break
     case 'drag-start': {
       const idx = findWordIndicesAt(e.x, e.y)
       if (idx) {
-        selection = { 
-          startLine: idx.lineIdx, 
+        selection = {
+          startLine: idx.lineIdx,
           startWordIdx: idx.wordIdx,
           endLine: idx.lineIdx,
           endWordIdx: idx.wordIdx
@@ -436,7 +436,7 @@ function handleInput(e: InputEvent) {
       break
     case 'key':
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextScene()
-      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   prevScene()
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevScene()
       if (e.key === 'Escape') hideLookupCard()
       break
   }
@@ -453,7 +453,7 @@ function handleTap(x: number, y: number) {
 
   // Check entity manifest
   const entity = manifest!.entityManifest?.find(e => e.name.toLowerCase() === word.toLowerCase())
-  
+
   showLookupCard({
     mode: entity ? 'entity' : 'ai-loading',
     title: word,
@@ -473,12 +473,12 @@ async function lookupTextAI(text: string, context?: string, retryCount = 0) {
   const controller = new AbortController()
   const timeoutMs = retryCount > 0 ? 45000 : 30000 // shorter on retry
   const timeoutId = setTimeout(() => {
-    console.warn(`[AI Lookup] TIMEOUT ${timeoutMs/1000}s reached for: "${text}"`)
+    console.warn(`[AI Lookup] TIMEOUT ${timeoutMs / 1000}s reached for: "${text}"`)
     controller.abort()
   }, timeoutMs)
 
   try {
-    const prompt = context 
+    const prompt = context
       ? `Define the word "${text}" in the context of this sentence: "${context}". Keep it brief and scholarly.`
       : `Provide a brief, scholarly definition for the term "${text}".`
 
@@ -492,15 +492,15 @@ async function lookupTextAI(text: string, context?: string, retryCount = 0) {
     clearTimeout(timeoutId)
     console.error(`[AI Lookup] Error:`, err)
     const isTimeout = err.name === 'AbortError'
-    
+
     // Retry once on timeout
     if (isTimeout && retryCount === 0) {
       console.log(`[AI Lookup] Retrying with longer timeout...`)
       return lookupTextAI(text, context, 1)
     }
-    
-    updateLookupCard({ 
-      mode: 'ai-error', 
+
+    updateLookupCard({
+      mode: 'ai-error',
       body: isTimeout ? 'Lookup timed out — AI might be busy' : `Error: ${err.message}`
     })
   }
@@ -531,18 +531,18 @@ function showSelectionMenu(x: number, y: number) {
 
 function getSelectedText(): string {
   if (!selection || !manifest || !position) return ''
-  
+
   // Extract text from selection
   let text = ''
   const startL = Math.min(selection.startLine, selection.endLine)
-  const endL   = Math.max(selection.startLine, selection.endLine)
+  const endL = Math.max(selection.startLine, selection.endLine)
 
   for (let li = startL; li <= endL; li++) {
     const line = currentLines[li]
     if (!line) continue
     const wStart = (li === selection.startLine) ? selection.startWordIdx : 0
-    const wEnd   = (li === selection.endLine)   ? selection.endWordIdx   : line.words.length - 1
-    
+    const wEnd = (li === selection.endLine) ? selection.endWordIdx : line.words.length - 1
+
     const words = line.words.slice(Math.min(wStart, wEnd), Math.max(wStart, wEnd) + 1)
     text += words.map(w => w.word).join(' ') + ' '
   }
@@ -645,13 +645,13 @@ let justNavigated = false
 
 function checkAutoChapterNav() {
   if (!manifest || !position || !currentLines.length || justNavigated) return
-  
+
   const now = Date.now()
   if (now - lastAutoNavTime < AUTO_NAV_COOLDOWN) return
-  
+
   const contentHeight = currentLines.length * config.lineHeight
   const scrollY = position.scrollOffset
-  
+
   // At bottom of content - need extra padding before auto-advancing
   if (scrollY > contentHeight + config.lineHeight) {
     console.log('[AutoNav] Bottom reached, going next')
@@ -660,7 +660,7 @@ function checkAutoChapterNav() {
     nextScene()
     setTimeout(() => { justNavigated = false }, 500)
   }
-  
+
   // At top of content - go to previous
   else if (scrollY <= 50 && position.chapterIndex > 0) {
     console.log('[AutoNav] Top reached, going prev')

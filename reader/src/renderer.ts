@@ -1,5 +1,5 @@
 // ── TypographyRenderer ───────────────────────────────────────────────────────
-// Kindle Plus canvas renderer: book typography, entity obstacles, search/selection highlights.
+// ai enhanced ebook reader canvas renderer: book typography, entity obstacles, search/selection highlights.
 
 import { prepareWithSegments, layoutNextLineRange, materializeLineRange } from '@chenglou/pretext'
 import type { LayoutCursor } from '@chenglou/pretext'
@@ -37,17 +37,17 @@ function computeWords(
   const bounds: WordBound[] = []
   const wordRegex = /\S+/g
   let match: RegExpExecArray | null
-  
+
   const oldFont = ctx.font
   ctx.font = font
-  
+
   while ((match = wordRegex.exec(text)) !== null) {
     const word = match[0]
     const startIdx = match.index
     const preText = text.slice(0, startIdx)
     const x = ctx.measureText(preText).width
     const w = ctx.measureText(word).width
-    
+
     bounds.push({
       word,
       x,
@@ -55,7 +55,7 @@ function computeWords(
       offset: lineStartOffset + startIdx
     })
   }
-  
+
   ctx.font = oldFont
   return bounds
 }
@@ -119,14 +119,14 @@ export function renderScene(
   // We split on blank lines (\n\n) to identify paragraphs.
   // We use a more robust split to handle varying newline styles.
   const paragraphs = scene.text.split(/\n\s*\n/).filter(p => p.trim().length > 0)
-  
+
   let prevWasHeadingOrBreak = true
   for (let pi = 0; pi < paragraphs.length; pi++) {
     let text = paragraphs[pi].trim()
-    
+
     const heading = isHeadingLine(text)
     const brk = isSceneBreak(text)
-    
+
     // Normalize whitespace within the paragraph for smooth reflow,
     // unless it's a scene break marker.
     if (!brk) {
@@ -167,7 +167,7 @@ export function renderScene(
     // However, since we normalized whitespace, we'll use a relative offset strategy.
     // For hit-testing, we'll store the original text indices if needed, 
     // but for now, we'll focus on the visual layout.
-    
+
     while (true) {
       // Compute line geometry
       let lineX = baseX
@@ -211,7 +211,7 @@ export function renderScene(
       ctx.font = paraFont
       // Note: offsets will be slightly off due to normalization, 
       // but words are still searchable by content.
-      const wordBounds = computeWords(ctx, materialized.text, lineX + indent, paraFont, 0) 
+      const wordBounds = computeWords(ctx, materialized.text, lineX + indent, paraFont, 0)
 
       lines.push({
         x: lineX + indent,
@@ -275,7 +275,7 @@ function drawLines(
     const imgW = Math.min(config.maxColumnWidth, canvas.width - config.paddingX * 2)
     const imgH = (illustration.height / illustration.width) * imgW
     const screenY = config.paddingTop - scrollOffset
-    
+
     // Only draw if on screen
     if (screenY + imgH > 0 && screenY < H) {
       asciiVisualizer.render(
@@ -315,7 +315,7 @@ function drawLines(
       const { startLine, startWordIdx, endLine, endWordIdx } = selection
       if (li >= startLine && li <= endLine) {
         const wStart = li === startLine ? startWordIdx : 0
-        const wEnd   = li === endLine   ? endWordIdx   : line.words.length - 1
+        const wEnd = li === endLine ? endWordIdx : line.words.length - 1
         if (wStart <= wEnd && line.words.length > 0) {
           const wx0 = line.x + (line.words[wStart]?.x ?? 0)
           const lastWord = line.words[wEnd]
@@ -326,7 +326,7 @@ function drawLines(
           // ── Selection Handles ──
           ctx.fillStyle = config.colors.accent || '#0078d7'
           const handleRadius = 6
-          
+
           if (li === startLine) {
             ctx.beginPath()
             ctx.arc(wx0, screenY, handleRadius, 0, Math.PI * 2)
@@ -352,24 +352,24 @@ function drawLines(
         const lowerName = name.toLowerCase()
         let startIdx = 0
         while ((startIdx = lineText.indexOf(lowerName, startIdx)) !== -1) {
-           const endIdx = startIdx + name.length
-           // Check if it's a full word match (simple check)
-           const charBefore = startIdx > 0 ? lineText[startIdx - 1] : ' '
-           const charAfter  = endIdx < lineText.length ? lineText[endIdx] : ' '
-           const isWord = /[\s.,!?;:()"]/.test(charBefore) && /[\s.,!?;:()"]/.test(charAfter)
+          const endIdx = startIdx + name.length
+          // Check if it's a full word match (simple check)
+          const charBefore = startIdx > 0 ? lineText[startIdx - 1] : ' '
+          const charAfter = endIdx < lineText.length ? lineText[endIdx] : ' '
+          const isWord = /[\s.,!?;:()"]/.test(charBefore) && /[\s.,!?;:()"]/.test(charAfter)
 
-           if (isWord) {
-             const preText = line.text.slice(0, startIdx)
-             const matchText = line.text.slice(startIdx, endIdx)
-             ctx.font = config.font
-             const preW = ctx.measureText(preText).width
-             const matchW = ctx.measureText(matchText).width
-             
-             // Editorial "Blue" or "Amber" underline/glow
-             ctx.fillStyle = config.colors.accent_glow || 'rgba(140, 100, 24, 0.1)'
-             ctx.fillRect(line.x + preW, screenY + config.lineHeight * 0.85, matchW, 2)
-           }
-           startIdx = endIdx
+          if (isWord) {
+            const preText = line.text.slice(0, startIdx)
+            const matchText = line.text.slice(startIdx, endIdx)
+            ctx.font = config.font
+            const preW = ctx.measureText(preText).width
+            const matchW = ctx.measureText(matchText).width
+
+            // Editorial "Blue" or "Amber" underline/glow
+            ctx.fillStyle = config.colors.accent_glow || 'rgba(140, 100, 24, 0.1)'
+            ctx.fillRect(line.x + preW, screenY + config.lineHeight * 0.85, matchW, 2)
+          }
+          startIdx = endIdx
         }
       }
     }
@@ -378,15 +378,15 @@ function drawLines(
     if (searchMatch && !isBreakOrnament) {
       const lineEnd = charOffset + line.text.length
       const matchStart = searchMatch.charOffset
-      const matchEnd   = searchMatch.charOffset + searchMatch.length
+      const matchEnd = searchMatch.charOffset + searchMatch.length
       if (matchStart < lineEnd && matchEnd > charOffset) {
         // Compute pixel range of match within this line
         const localStart = Math.max(0, matchStart - charOffset)
-        const localEnd   = Math.min(line.text.length, matchEnd - charOffset)
-        const preText    = line.text.slice(0, localStart)
-        const matchText  = line.text.slice(localStart, localEnd)
+        const localEnd = Math.min(line.text.length, matchEnd - charOffset)
+        const preText = line.text.slice(0, localStart)
+        const matchText = line.text.slice(localStart, localEnd)
         ctx.font = config.font
-        const preW  = ctx.measureText(preText).width
+        const preW = ctx.measureText(preText).width
         const matchW = ctx.measureText(matchText).width
         ctx.fillStyle = config.colors.glow
         ctx.fillRect(line.x + preW, screenY, matchW, config.lineHeight)
@@ -410,15 +410,15 @@ function drawLines(
       // Check for dialogue and apply bold styling
       const lineText = line.text
       const hasSpeech = /"[^"]+"|'[^']+'/.test(lineText)
-      
+
       ctx.font = config.font
       ctx.fillStyle = config.colors.text
-      
+
       if (hasSpeech) {
         // Draw quoted sections in bold accent color
         const parts = lineText.split(/(["'])(.*?)\1/g)
         let xPos = line.x
-        
+
         for (const part of parts) {
           if (part.startsWith('"') || part.startsWith("'")) {
             ctx.font = `bold ${config.fontSize}px Lora, Georgia, serif`
@@ -448,12 +448,12 @@ function drawLines(
 export function resizeCanvas(canvas: HTMLCanvasElement): void {
   const dpr = window.devicePixelRatio || 1
   const rect = canvas.getBoundingClientRect()
-  canvas.width  = rect.width  * dpr
+  canvas.width = rect.width * dpr
   canvas.height = rect.height * dpr
   const ctx = canvas.getContext('2d')!
   ctx.scale(dpr, dpr)
-  ;(canvas as HTMLCanvasElement & { _logicalW: number; _logicalH: number })._logicalW = rect.width
-  ;(canvas as HTMLCanvasElement & { _logicalW: number; _logicalH: number })._logicalH = rect.height
+    ; (canvas as HTMLCanvasElement & { _logicalW: number; _logicalH: number })._logicalW = rect.width
+    ; (canvas as HTMLCanvasElement & { _logicalW: number; _logicalH: number })._logicalH = rect.height
 }
 
 export function getLogicalSize(canvas: HTMLCanvasElement): { w: number; h: number } {

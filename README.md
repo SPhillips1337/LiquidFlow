@@ -1,4 +1,4 @@
-# LiquidFlow (Kindle Plus)
+# LiquidFlow
 
 LiquidFlow is a premium, high-fidelity, canvas-first reading platform. It evolves the standard digital reading experience into a tactile, animated environment with cinematic visual effects and integrated AI intelligence.
 

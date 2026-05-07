@@ -1,6 +1,6 @@
 # LiquidFlow: AGENTS.md
 
-**Project**: LiquidFlow (Kindle Plus) - Premium canvas-first reading platform
+**Project**: LiquidFlow (ai enhanced ebook reader) - Premium canvas-first reading platform
 
 ---
 

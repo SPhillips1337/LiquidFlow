@@ -1,4 +1,4 @@
-// ── Shared types for Kindle Plus reader ─────────────────────────────────────
+// ── Shared types for ai enhanced ebook reader reader ─────────────────────────────────────
 
 // Re-export LayoutCursor from pretext so other modules only need to import from './types'
 import type { LayoutCursor } from '@chenglou/pretext'

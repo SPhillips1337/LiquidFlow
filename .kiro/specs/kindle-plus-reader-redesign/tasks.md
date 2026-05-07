@@ -1,8 +1,8 @@
-# Implementation Plan: Kindle Plus Reader Redesign
+# Implementation Plan: ai enhanced ebook reader Reader Redesign
 
 ## Overview
 
-Incrementally transform LiquidFlow from a proof-of-concept canvas reader into a fully-featured "Kindle Plus" reading application. The plan builds bottom-up: types and data models first, then new subsystem modules, then the renderer overhaul, then the app shell wiring, and finally the pipeline extensions.
+Incrementally transform LiquidFlow from a proof-of-concept canvas reader into a fully-featured "ai enhanced ebook reader" reading application. The plan builds bottom-up: types and data models first, then new subsystem modules, then the renderer overhaul, then the app shell wiring, and finally the pipeline extensions.
 
 ## Tasks
 

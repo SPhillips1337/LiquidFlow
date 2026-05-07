@@ -1,8 +1,8 @@
-# Design Document: Kindle Plus Reader Redesign
+# Design Document: ai enhanced ebook reader Reader Redesign
 
 ## Overview
 
-This redesign transforms LiquidFlow from a proof-of-concept canvas reader (single draggable orb, ASCII side panel, random-entity lore card) into a fully-featured "Kindle Plus" reading application. The core creative differentiator — canvas-based animated text using `@chenglou/pretext` — is preserved and extended. New capabilities include proper book typography, Kindle-style reader controls, inline animated entities that displace text in real time, cinematic scene-transition animations, and an elegant word/entity lookup system.
+This redesign transforms LiquidFlow from a proof-of-concept canvas reader (single draggable orb, ASCII side panel, random-entity lore card) into a fully-featured "ai enhanced ebook reader" reading application. The core creative differentiator — canvas-based animated text using `@chenglou/pretext` — is preserved and extended. New capabilities include proper book typography, Kindle-style reader controls, inline animated entities that displace text in real time, cinematic scene-transition animations, and an elegant word/entity lookup system.
 
 The design is additive where possible: existing modules are refactored rather than deleted wholesale. The pipeline gains richer AI annotation; the reader gains new subsystems layered on top of the existing render loop.
 

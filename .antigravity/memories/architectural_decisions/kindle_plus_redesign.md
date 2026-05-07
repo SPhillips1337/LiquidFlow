@@ -1,7 +1,7 @@
-# Architectural Decision: Kindle Plus Redesign
+# Architectural Decision: ai enhanced ebook reader Redesign
 
 ## Context
-The initial PoC for LiquidFlow was a single-canvas reader with limited controls and a "random" entity system. The goal is to mature this into a premium "Kindle Plus" experience.
+The initial PoC for LiquidFlow was a single-canvas reader with limited controls and a "random" entity system. The goal is to mature this into a premium "ai enhanced ebook reader" experience.
 
 ## Decision
 Undertake a comprehensive redesign of the reader and pipeline to support professional typography, standard reader controls, and deep AI-driven entity lookups.

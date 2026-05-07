@@ -1,7 +1,7 @@
 # LiquidFlow Specification
 
 ## Project Overview
-**LiquidFlow** (Kindle Plus) is a premium, "canvas-first" reading platform that transforms static ebooks into animated, interactive experiences using `@chenglou/pretext` for text layout and HTML5 Canvas for rendering.
+**LiquidFlow** (ai enhanced ebook reader) is a premium, "canvas-first" reading platform that transforms static ebooks into animated, interactive experiences using `@chenglou/pretext` for text layout and HTML5 Canvas for rendering.
 
 ---
 
