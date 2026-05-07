@@ -25,11 +25,45 @@ export const GUTENBERG_BOOKS: Record<string, { url: string; title: string; autho
   }
 }
 
+function fetchWithTimeout(url: string, timeoutMs = 30000): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'LiquidFlow/0.3 (ebook reader)' }
+    }).then(res => {
+      clearTimeout(timer)
+      resolve(res)
+    }).catch(err => {
+      clearTimeout(timer)
+      reject(err)
+    })
+  })
+}
+
 /** Fetch raw text from Gutenberg */
 export async function fetchGutenbergText(url: string): Promise<string> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`)
-  return res.text()
+  // Extract book ID for fallback URLs
+  const bookId = url.match(/(?:ebooks\/|epub\/)(\d+)/)?.[1] || ''
+  const attempts = [
+    url,
+    ...(bookId ? [
+      `https://www.gutenberg.org/files/${bookId}/${bookId}-0.txt`,
+      `https://www.gutenberg.org/ebooks/${bookId}.txt.utf-8`,
+    ] : []),
+  ]
+
+  for (const attempt of [...new Set(attempts)]) {
+    try {
+      const res = await fetchWithTimeout(attempt, 15000)
+      if (res.ok) return res.text()
+    } catch {
+      // Try next URL
+    }
+  }
+
+  throw new Error(`Failed to fetch Gutenberg text from any mirror for: ${url}`)
 }
 
 /** Strip Gutenberg boilerplate header and footer */
@@ -57,23 +91,76 @@ export function stripBoilerplate(raw: string): string {
 
 /** Split text into chapters using common Gutenberg chapter headings */
 export function splitChapters(text: string): Array<{ title: string; body: string }> {
-  // Match lines like "CHAPTER I", "Chapter 1", "CHAPTER ONE", "I.", "Part I" etc.
-  const chapterRe = /^(chapter\s+[\divxlcIVXLC]+\.?|part\s+[\divxlcIVXLC]+\.?|[IVX]+\.\s)/im
-
   const lines = text.split('\n')
+
+  const isHeading = (line: string): boolean => {
+    const t = line.trim()
+    if (!t || t.length > 80) return false
+
+    // "Chapter 1", "CHAPTER I", "Chapter One", "Section 1", "Section I"
+    if (/^(?:chapter|section)\s+\S+/i.test(t)) return true
+    // "Part I", "Part 1" (not "part of" or "part instead")
+    if (/^part\s+(?:\d+|[IVXLCDM]+)\b/i.test(t)) return true
+    // "Letter 1", "Letter 2" (digits only — avoids "letter had")
+    if (/^letter\s+\d+/i.test(t)) return true
+
+    // Bare roman numeral on its own line: "I.", "II.", "XXIV."
+    if (/^[IVXLCDM]+\.?$/.test(t)) return true
+
+    // All-caps title (5+ chars, starts with uppercase letter):
+    // "STORY OF THE DOOR", "DR. JEKYLL'S NARRATIVE"
+    if (t.length >= 5 && /^[A-Z\u00C0-\u00D6]/.test(t) && t === t.toUpperCase()) return true
+
+    return false
+  }
+
+  // ── Pass 1: Skip the Table of Contents ──────────────────────────────────
+  // Find the first heading that is followed by substantial body text.
+  // Everything before it is front matter / TOC and goes into "Preface".
+  let firstRealIdx = -1
+  for (let i = 0; i < Math.min(lines.length, 400); i++) {
+    if (!isHeading(lines[i])) continue
+
+    let bodyChars = 0
+    for (let j = i + 1; j < Math.min(i + 30, lines.length); j++) {
+      if (isHeading(lines[j])) break
+      bodyChars += lines[j].trim().length
+      if (bodyChars > 300) break
+    }
+
+    if (bodyChars > 300) {
+      firstRealIdx = i
+      break
+    }
+  }
+
+  // Fallback: no real heading found — use first heading at all, or whole book
+  if (firstRealIdx === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (isHeading(lines[i])) { firstRealIdx = i; break }
+    }
+  }
+  if (firstRealIdx === -1) {
+    return [{ title: 'Preface', body: text.trim() }]
+  }
+
+  // ── Pass 2: Split from first real heading onward ────────────────────────
   const chapters: Array<{ title: string; body: string }> = []
   let currentTitle = 'Preface'
   let currentLines: string[] = []
 
-  for (const line of lines) {
-    if (chapterRe.test(line.trim()) && line.trim().length < 80) {
+  // Everything before the first real chapter is front matter (Preface)
+  for (let i = 0; i < firstRealIdx; i++) currentLines.push(lines[i])
+
+  for (let i = firstRealIdx; i < lines.length; i++) {
+    if (isHeading(lines[i])) {
       if (currentLines.join('').trim().length > 100) {
         chapters.push({ title: currentTitle, body: currentLines.join('\n').trim() })
       }
-      currentTitle = line.trim()
+      currentTitle = lines[i].trim()
       currentLines = []
     } else {
-      currentLines.push(line)
+      currentLines.push(lines[i])
     }
   }
 
@@ -81,8 +168,7 @@ export function splitChapters(text: string): Array<{ title: string; body: string
     chapters.push({ title: currentTitle, body: currentLines.join('\n').trim() })
   }
 
-  // Limit to first 8 chapters for PoC
-  return chapters.slice(0, 8)
+  return chapters
 }
 
 /** Split a chapter body into scenes (paragraph clusters of ~400 words) */
