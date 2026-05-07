@@ -1,13 +1,13 @@
 # Codebase Insight: LiquidFlow Architecture
 
 ## Overview
-LiquidFlow is an animated ebook reader platform built with clear separation between content ingestion and presentation.
+LiquidFlow is an animated ebook reader platform with an AI reading companion, built with clear separation between content ingestion and presentation.
 
 ## Components
 
 ### 1. Pipeline (`pipeline/`)
 - **Role**: Ingestion and annotation.
-- **Tech**: Node.js, Project Gutenberg, Ollama AI, Jimp.
+- **Tech**: Node.js, Project Gutenberg, Ollama/LM Studio AI, Jimp.
 - **Function**: 
     - Fetches public domain books from Project Gutenberg.
     - Strips boilerplate and splits into Chapters and Scenes (~400-word segments).
@@ -17,7 +17,7 @@ LiquidFlow is an animated ebook reader platform built with clear separation betw
     - Extracts entity manifest with AI-generated descriptions.
 
 ### 2. Reader (`reader/`)
-- **Role**: Presentation and interaction.
+- **Role**: Presentation, interaction, and AI companion features.
 - **Tech**: Vite, TypeScript, `@chenglou/pretext`.
 - **Function**:
     - Renders book text on HTML5 Canvas using pretext.
@@ -28,11 +28,24 @@ LiquidFlow is an animated ebook reader platform built with clear separation betw
     - Font controls, chapter nav arrows, sidebar.
     - Dialogue styling (quoted text bold).
     - Entity highlighting.
+    - **AI Companion panel** (toggle via toolbar ✦ button):
+      - Summarize chapter, study guide, quiz, extract notes, TTS read-aloud.
+    - Background transition effects (particle-drift, fluid-smoke, typographic-ascii).
+
+### 3. AI Backend (`reader/src/ai.ts`)
+- **Role**: Unified AI client supporting Ollama and OpenAI-compatible endpoints.
+- **Tech**: Fetch-based client with configurable base URL and API format.
+- **Function**:
+    - `ollamaChat(model, prompt, system)` — core chat function.
+    - `getDefaultModel()` — returns configured model with fallback chain.
+    - Dual-format support: `ollama` (default) vs `openai` (LM Studio).
+    - Used by: scene annotation (pipeline), lore cards, ASCII generation, AI Companion, word lookup.
 
 ## Key Dependencies
 - **@chenglou/pretext**: Precise text layout, flow around obstacles.
-- **Ollama**: Local LLM (llama3 for lookups, granite4:3b for annotation).
+- **Ollama / OpenAI-compatible**: Local LLM (configured via `VITE_AI_BASE_URL` + `VITE_AI_FORMAT`).
 - **Jimp**: Image processing for ASCII conversion.
+- **Web Speech API**: Browser-native TTS for Read Aloud feature.
 
 ## Current Features
 - Canvas typography at 60fps
@@ -45,8 +58,15 @@ LiquidFlow is an animated ebook reader platform built with clear separation betw
 - Chapter sidebar (desktop)
 - Book management (regenerate/delete)
 - LLM retry logic
+- AI Companion panel (summarize, study guide, quiz, notes, TTS)
+- OpenAI-compatible backend support (LM Studio)
+- Background transition effects on chapter change
+
+## Removed / Disabled
+- **Entity floating animation**: Disabled — moving text obstacles caused pretext re-layout wobble.
 
 ## Build Notes
-- Reader uses RAF loop - avoid DOM for visual updates
-- Layout cache keyed by `${sceneId}:${fontSize}`
-- Auto-nav triggers after scroll past content + 1 line
+- Reader uses RAF loop - avoid DOM for visual updates.
+- Layout cache keyed by `${sceneId}:${fontSize}`.
+- Auto-nav triggers after scroll past content + 1 line.
+- Transition effects render on a separate z-index layer (`#transition-canvas`, z-index: 1).

@@ -31,3 +31,20 @@
 - **Impact**: All menus showed as open simultaneously.
 - **Fix**: Replaced global window listener with proper `openMenu` state tracking that only closes previously open menu.
 - **Pattern**: Use scoped state, not global listeners in loops.
+
+## 🔴 Failure: Entity Animation Causes Text Wobble
+- **Context**: Floating character names ("entities") acted as text obstacles in `renderer.ts` lines 185-203, causing pretext to reflow lines around them on every frame.
+- **Impact**: Visible text wobble when opening a chapter as entities drifted through the prose and line widths changed per frame.
+- **Fix**: Disabled `spawnEntities()` calls in `openBook()` and `onSceneChanged()`. Transition effects (background particles) kept intact since they render on a separate z-index layer.
+- **Lesson**: Dynamic obstacles in pretext cause continuous re-layout. Use separate canvas layers for background effects vs. in-text animations.
+
+## 🟢 Success: Dual-Format AI Client
+- **Context**: The AI client (`ai.ts`) was hardcoded to Ollama's API format (`/api/chat`, `{ message: { content } }`).
+- **Impact**: Users with LM Studio or other OpenAI-compatible endpoints couldn't use AI features without running a translation proxy.
+- **Fix**: Added `VITE_AI_FORMAT` env var (`ollama` | `openai`). When `openai`, posts to `/chat/completions` and parses `choices[0].message.content`. Backward compatible — falls back to legacy `VITE_OLLAMA_*` vars.
+- **Pattern**: Abstract API format behind a single config toggle. Auto-detect response shape based on format flag.
+
+## 🟢 Success: Self-Contained AI Companion Module
+- **Context**: Needed to add 5 AI-powered features (summarize, study guide, quiz, notes, TTS) without bloating `main.ts` or the toolbar.
+- **Impact**: Single 240-line module `ai-companion.ts` encapsulates all panel UI, AI calls, TTS, quiz state, and note persistence. `main.ts` only imports and wires 4 lines.
+- **Pattern**: Keep feature-dense UI modules self-contained with their own DOM creation, event handling, and state management. Export a factory function with a minimal public API (show/hide/toggle/destroy).

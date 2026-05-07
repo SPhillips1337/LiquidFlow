@@ -36,9 +36,7 @@
 ## Future Ideas (Not Started)
 - [ ] Chapter decorations (ASCII banners)
 - [ ] Drop caps (large first letter)
-- [ ] Running characters through text animation
 - [ ] Fluid smoke transitions
-- [ ] TTS integration
 - [ ] Persistent storage (IndexedDB)
 - [ ] Draggable selection handles resize
 
@@ -53,3 +51,19 @@
 - [x] March Hare ASCII Illustration
 - [x] Library Dashboard
 - [x] Auto-chapter navigation
+
+---
+
+## Recently Added
+
+### AI Companion Panel
+- [x] **Summarize** — Ollama generates chapter thesis, key ideas, takeaways
+- [x] **Study Guide** — Per-chapter deep read (main argument, quote, question)
+- [x] **Quiz Me** — AI-generated 5-question quiz (factual + conceptual + applied)
+- [x] **Notes** — AI-extracted quotes, frameworks, tags saved to localStorage
+- [x] **Saved Notes** — Browse all extracted notes by chapter
+- [x] **Read Aloud** — Browser SpeechSynthesis TTS with 0.5x–2x speed control
+
+### Infrastructure
+- [x] **openai-compatible backend** — LM Studio / OpenAI endpoint support via `VITE_AI_FORMAT`
+- [x] **Entity animation disabled** — Removed `spawnEntities()` calls to fix text wobble on chapter open
