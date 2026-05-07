@@ -2,6 +2,13 @@
 
 // Known Gutenberg plain-text URLs for our PoC books
 export const GUTENBERG_BOOKS: Record<string, { url: string; title: string; author: string; emoji: string; theme?: string }> = {
+  'demo': {
+    url: 'https://www.gutenberg.org/cache/epub/35/pg35.txt',
+    title: 'The Time Machine',
+    author: 'H.G. Wells',
+    emoji: '⏱',
+    theme: 'dark'
+  },
   'time-machine': {
     url: 'https://www.gutenberg.org/cache/epub/35/pg35.txt',
     title: 'The Time Machine',
@@ -21,6 +28,27 @@ export const GUTENBERG_BOOKS: Record<string, { url: string; title: string; autho
     title: 'Moby-Dick',
     author: 'Herman Melville',
     emoji: '🐋',
+    theme: 'dark'
+  },
+  'frankenstein': {
+    url: 'https://www.gutenberg.org/cache/epub/84/pg84.txt',
+    title: 'Frankenstein',
+    author: 'Mary Shelley',
+    emoji: '🧟',
+    theme: 'dark'
+  },
+  'jekyll': {
+    url: 'https://www.gutenberg.org/cache/epub/43/pg43.txt',
+    title: 'The Strange Case of Dr. Jekyll and Mr. Hyde',
+    author: 'Robert Louis Stevenson',
+    emoji: '🧪',
+    theme: 'dark'
+  },
+  'twenty-thousand-leagues': {
+    url: 'https://www.gutenberg.org/cache/epub/164/pg164.txt',
+    title: 'Twenty Thousand Leagues under the Sea',
+    author: 'Jules Verne',
+    emoji: '🌊',
     theme: 'dark'
   }
 }
@@ -115,20 +143,22 @@ export function splitChapters(text: string): Array<{ title: string; body: string
   }
 
   // ── Pass 1: Skip the Table of Contents ──────────────────────────────────
-  // Find the first heading that is followed by substantial body text.
-  // Everything before it is front matter / TOC and goes into "Preface".
+  // The TOC is a dense cluster of heading candidates at the beginning of the book.
+  // We find the first heading that is well-separated from the next heading
+  // (> 30 lines of gap), indicating substantial body text follows.
   let firstRealIdx = -1
-  for (let i = 0; i < Math.min(lines.length, 400); i++) {
+  for (let i = 0; i < Math.min(lines.length, 500); i++) {
     if (!isHeading(lines[i])) continue
 
-    let bodyChars = 0
-    for (let j = i + 1; j < Math.min(i + 30, lines.length); j++) {
+    // Distance (in lines) to the next heading candidate
+    let gap = 0
+    for (let j = i + 1; j < Math.min(lines.length, i + 200); j++) {
+      gap++
       if (isHeading(lines[j])) break
-      bodyChars += lines[j].trim().length
-      if (bodyChars > 300) break
     }
 
-    if (bodyChars > 300) {
+    // A heading far from the next one is followed by real body text
+    if (gap > 30) {
       firstRealIdx = i
       break
     }
@@ -145,20 +175,38 @@ export function splitChapters(text: string): Array<{ title: string; body: string
   }
 
   // ── Pass 2: Split from first real heading onward ────────────────────────
+  // Handle two-line headings like "CHAPTER I" / "A SHIFTING REEF"
+  // by merging consecutive heading lines into one title.
   const chapters: Array<{ title: string; body: string }> = []
   let currentTitle = 'Preface'
   let currentLines: string[] = []
 
-  // Everything before the first real chapter is front matter (Preface)
-  for (let i = 0; i < firstRealIdx; i++) currentLines.push(lines[i])
+  // If the line before the first real heading is also a heading, merge it in
+  let effectiveStart = firstRealIdx
+  if (firstRealIdx > 0 && isHeading(lines[firstRealIdx - 1])) {
+    effectiveStart = firstRealIdx - 1
+  }
 
-  for (let i = firstRealIdx; i < lines.length; i++) {
+  // Everything before the effective start is front matter (Preface)
+  for (let i = 0; i < effectiveStart; i++) currentLines.push(lines[i])
+
+  // Split, folding consecutive heading lines into one title
+  for (let i = effectiveStart; i < lines.length; i++) {
     if (isHeading(lines[i])) {
+      // Collect all consecutive heading lines
+      const titleParts: string[] = [lines[i].trim()]
+      let j = i + 1
+      while (j < lines.length && isHeading(lines[j])) {
+        titleParts.push(lines[j].trim())
+        j++
+      }
+
       if (currentLines.join('').trim().length > 100) {
         chapters.push({ title: currentTitle, body: currentLines.join('\n').trim() })
       }
-      currentTitle = lines[i].trim()
+      currentTitle = titleParts.join(' ')
       currentLines = []
+      i = j - 1
     } else {
       currentLines.push(lines[i])
     }
