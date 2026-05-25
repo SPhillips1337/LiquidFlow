@@ -40,6 +40,22 @@ Install all dependencies from the root directory using npm workspaces:
 npm install
 ```
 
+Alternatively, use the hardened installer. It checks for `git`, `node`, and `npm`, safely clones (or validates an existing checkout), installs workspace dependencies, and runs the production build:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SPhillips1337/LiquidFlow/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+To install into a custom directory or from a non-default branch:
+
+```bash
+LIQUIDFLOW_BRANCH=dev ./install.sh ~/src/LiquidFlow
+```
+
+> Review scripts before running them. If you are testing the development branch, replace `main` in the raw URL with `dev`.
+
 ### 2. Environment Setup
 
 Copy the example environment file and fill in your details:
