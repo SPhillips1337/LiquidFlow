@@ -44,7 +44,7 @@ export function saveTheme(theme: string): void {
 export function loadTheme(): 'dark' | 'light' | 'sepia' {
   const raw = localStorage.getItem('liquidflow.theme')
   if (raw === 'dark' || raw === 'light' || raw === 'sepia') return raw
-  return 'dark'
+  return 'light'
 }
 
 export const DEFAULT_TTS_SETTINGS: TtsSettings = {

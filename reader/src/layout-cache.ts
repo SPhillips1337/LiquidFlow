@@ -33,7 +33,7 @@ export const THEMES: Record<string, any> = {
   }
 }
 
-export function makeTypographyConfig(fontSize: number, canvasWidth: number, theme: 'dark' | 'light' | 'sepia' = 'dark'): TypographyConfig {
+export function makeTypographyConfig(fontSize: number, canvasWidth: number, theme: 'dark' | 'light' | 'sepia' = 'light'): TypographyConfig {
   const lineHeight = Math.round(fontSize * 1.6)
   const maxColumnWidth = 680
   const paddingX = canvasWidth > 680 + 96

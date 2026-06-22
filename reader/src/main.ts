@@ -73,6 +73,8 @@ let rafId = 0
 
 // ── Initialization ────────────────────────────────────────────────────────────
 async function init() {
+  document.body.setAttribute('data-theme', config.theme)
+
   const books = await loadShelf()
   renderShelf(books, bookGrid, openBook)
 
