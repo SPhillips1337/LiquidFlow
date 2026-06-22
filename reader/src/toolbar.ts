@@ -1,4 +1,4 @@
-import type { BookManifest, SearchState } from './types'
+import type { BookManifest, SearchState, TtsPlaybackState, TtsSettings, TtsVoiceOption } from './types'
 
 export interface ToolbarCallbacks {
   onBack(): void
@@ -6,7 +6,6 @@ export interface ToolbarCallbacks {
   onFontDecrease(): void
   onFontReset(): void
   onThemeToggle(): void
-  onSettingsClick(): void
   onSearchSubmit(query: string): void
   onSearchNext(): void
   onSearchPrev(): void
@@ -15,6 +14,10 @@ export interface ToolbarCallbacks {
   onChapterSelect(chapterIndex: number): void
   onChapterNext(): void
   onChapterPrev(): void
+  onTtsSettingsChange(settings: TtsSettings): void
+  onTtsRead(): void
+  onTtsPauseResume(): void
+  onTtsStop(): void
 }
 
 export function createToolbar(
@@ -28,6 +31,9 @@ export function createToolbar(
   setSearchState(state: SearchState): void
   setFontSize(size: number, min: number, max: number): void
   setTheme(theme: 'dark' | 'light' | 'sepia'): void
+  setTtsSettings(settings: TtsSettings): void
+  setTtsVoices(voices: TtsVoiceOption[]): void
+  setTtsPlaybackState(state: TtsPlaybackState): void
   destroy(): void
 } {
   // ── Inject HTML ────────────────────────────────────────────────────────────
@@ -75,9 +81,48 @@ export function createToolbar(
     <div class="search-status"></div>
   `
 
+  const settingsOverlay = document.createElement('div')
+  settingsOverlay.className = 'settings-overlay hidden'
+  settingsOverlay.setAttribute('role', 'dialog')
+  settingsOverlay.setAttribute('aria-labelledby', 'settings-title')
+  settingsOverlay.innerHTML = `
+    <form class="settings-panel">
+      <div class="settings-header">
+        <h2 id="settings-title">Reader Settings</h2>
+        <button class="tb-btn settings-close" type="button" aria-label="Close settings">✕</button>
+      </div>
+      <fieldset class="settings-fieldset">
+        <legend>Text to Speech</legend>
+        <label class="settings-field" for="tts-voice">
+          <span>Voice</span>
+          <select id="tts-voice" name="voice" class="tts-voice-select"></select>
+        </label>
+        <label class="settings-field" for="tts-rate">
+          <span>Speed <output class="tts-rate-value" for="tts-rate">1.0x</output></span>
+          <input id="tts-rate" name="rate" class="tts-rate" type="range" min="0.5" max="2" step="0.1" value="1" />
+        </label>
+        <label class="settings-field" for="tts-pitch">
+          <span>Pitch <output class="tts-pitch-value" for="tts-pitch">1.0</output></span>
+          <input id="tts-pitch" name="pitch" class="tts-pitch" type="range" min="0.5" max="2" step="0.1" value="1" />
+        </label>
+        <label class="settings-check" for="tts-auto-read">
+          <input id="tts-auto-read" name="autoRead" class="tts-auto-read" type="checkbox" />
+          <span>Auto-read when opening a book or changing chapters</span>
+        </label>
+        <div class="settings-actions">
+          <button class="tb-btn tts-read" type="button">Read chapter</button>
+          <button class="tb-btn tts-pause" type="button" disabled>Pause</button>
+          <button class="tb-btn tts-stop" type="button" disabled>Stop</button>
+        </div>
+        <p class="tts-status" aria-live="polite"></p>
+      </fieldset>
+    </form>
+  `
+
   container.appendChild(toolbarEl)
   container.appendChild(chapterOverlay)
   container.appendChild(searchOverlay)
+  container.appendChild(settingsOverlay)
 
   // ── Element refs ───────────────────────────────────────────────────────────
   const chapterTitleEl = toolbarEl.querySelector<HTMLElement>('.tb-chapter-title')!
@@ -102,6 +147,24 @@ export function createToolbar(
   const searchNextBtn = searchOverlay.querySelector<HTMLButtonElement>('.search-next')!
   const searchCloseBtn = searchOverlay.querySelector<HTMLButtonElement>('.search-close')!
   const searchStatusEl = searchOverlay.querySelector<HTMLElement>('.search-status')!
+  const settingsCloseBtn = settingsOverlay.querySelector<HTMLButtonElement>('.settings-close')!
+  const ttsVoiceSelect = settingsOverlay.querySelector<HTMLSelectElement>('.tts-voice-select')!
+  const ttsRateInput = settingsOverlay.querySelector<HTMLInputElement>('.tts-rate')!
+  const ttsPitchInput = settingsOverlay.querySelector<HTMLInputElement>('.tts-pitch')!
+  const ttsAutoReadInput = settingsOverlay.querySelector<HTMLInputElement>('.tts-auto-read')!
+  const ttsRateValue = settingsOverlay.querySelector<HTMLOutputElement>('.tts-rate-value')!
+  const ttsPitchValue = settingsOverlay.querySelector<HTMLOutputElement>('.tts-pitch-value')!
+  const ttsReadBtn = settingsOverlay.querySelector<HTMLButtonElement>('.tts-read')!
+  const ttsPauseBtn = settingsOverlay.querySelector<HTMLButtonElement>('.tts-pause')!
+  const ttsStopBtn = settingsOverlay.querySelector<HTMLButtonElement>('.tts-stop')!
+  const ttsStatusEl = settingsOverlay.querySelector<HTMLElement>('.tts-status')!
+
+  let currentTtsSettings: TtsSettings = {
+    voiceURI: '',
+    rate: 1,
+    pitch: 1,
+    autoRead: false
+  }
 
   // ── Populate chapter list ──────────────────────────────────────────────────
   manifest.chapters.forEach((chapter, index) => {
@@ -119,6 +182,7 @@ export function createToolbar(
   function openChapterOverlay() {
     chapterOverlay.classList.remove('hidden')
     searchOverlay.classList.add('hidden')
+    settingsOverlay.classList.add('hidden')
   }
 
   function closeChapterOverlay() {
@@ -128,12 +192,40 @@ export function createToolbar(
   function openSearchOverlay() {
     searchOverlay.classList.remove('hidden')
     chapterOverlay.classList.add('hidden')
+    settingsOverlay.classList.add('hidden')
     searchInput.focus()
   }
 
   function closeSearchOverlay() {
     searchOverlay.classList.add('hidden')
     searchStatusEl.textContent = ''
+  }
+
+  function openSettingsOverlay() {
+    settingsOverlay.classList.remove('hidden')
+    chapterOverlay.classList.add('hidden')
+    searchOverlay.classList.add('hidden')
+    ttsVoiceSelect.focus()
+  }
+
+  function closeSettingsOverlay() {
+    settingsOverlay.classList.add('hidden')
+  }
+
+  function readTtsSettings(): TtsSettings {
+    return {
+      voiceURI: ttsVoiceSelect.value,
+      rate: Number(ttsRateInput.value),
+      pitch: Number(ttsPitchInput.value),
+      autoRead: ttsAutoReadInput.checked
+    }
+  }
+
+  function handleTtsSettingsInput() {
+    currentTtsSettings = readTtsSettings()
+    ttsRateValue.value = `${currentTtsSettings.rate.toFixed(1)}x`
+    ttsPitchValue.value = currentTtsSettings.pitch.toFixed(1)
+    callbacks.onTtsSettingsChange(currentTtsSettings)
   }
 
   // ── Button handlers ────────────────────────────────────────────────────────
@@ -150,7 +242,13 @@ function handleChapterNext(e: Event) {
   function handleFontReset() { callbacks.onFontReset() }
   function handleFontInc() { callbacks.onFontIncrease() }
   function handleThemeToggle() { callbacks.onThemeToggle() }
-  function handleSettingsClick() { callbacks.onSettingsClick() }
+  function handleSettingsClick() {
+    if (settingsOverlay.classList.contains('hidden')) {
+      openSettingsOverlay()
+    } else {
+      closeSettingsOverlay()
+    }
+  }
 
   function handleAIToggle() { callbacks.onAICompanionToggle() }
 
@@ -199,12 +297,16 @@ function handleChapterNext(e: Event) {
     if (!searchOverlay.classList.contains('hidden') && !searchOverlay.contains(target) && target !== searchBtn) {
       closeSearchOverlay()
     }
+    if (!settingsOverlay.classList.contains('hidden') && !settingsOverlay.contains(target) && target !== settingsBtn) {
+      closeSettingsOverlay()
+    }
   }
 
   function handleDocKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       closeChapterOverlay()
       closeSearchOverlay()
+      closeSettingsOverlay()
     }
   }
 
@@ -228,6 +330,14 @@ function handleChapterNext(e: Event) {
   searchNextBtn.addEventListener('click', () => callbacks.onSearchNext())
   searchCloseBtn.addEventListener('click', handleSearchClose)
   searchInput.addEventListener('keydown', handleSearchInputKeydown)
+  settingsCloseBtn.addEventListener('click', closeSettingsOverlay)
+  ttsVoiceSelect.addEventListener('change', handleTtsSettingsInput)
+  ttsRateInput.addEventListener('input', handleTtsSettingsInput)
+  ttsPitchInput.addEventListener('input', handleTtsSettingsInput)
+  ttsAutoReadInput.addEventListener('change', handleTtsSettingsInput)
+  ttsReadBtn.addEventListener('click', () => callbacks.onTtsRead())
+  ttsPauseBtn.addEventListener('click', () => callbacks.onTtsPauseResume())
+  ttsStopBtn.addEventListener('click', () => callbacks.onTtsStop())
   document.addEventListener('pointerdown', handleDocPointerdown)
   document.addEventListener('keydown', handleDocKeydown)
 
@@ -266,6 +376,56 @@ function handleChapterNext(e: Event) {
       themeBtn.textContent = theme === 'light' ? '🌙' : '☀️'
     },
 
+    setTtsSettings(settings: TtsSettings) {
+      currentTtsSettings = settings
+      ttsVoiceSelect.value = settings.voiceURI
+      ttsRateInput.value = String(settings.rate)
+      ttsPitchInput.value = String(settings.pitch)
+      ttsAutoReadInput.checked = settings.autoRead
+      ttsRateValue.value = `${settings.rate.toFixed(1)}x`
+      ttsPitchValue.value = settings.pitch.toFixed(1)
+    },
+
+    setTtsVoices(voices: TtsVoiceOption[]) {
+      const selected = currentTtsSettings.voiceURI
+      ttsVoiceSelect.innerHTML = ''
+
+      if (voices.length === 0) {
+        const option = document.createElement('option')
+        option.value = ''
+        option.textContent = 'System default voice'
+        ttsVoiceSelect.appendChild(option)
+        ttsStatusEl.textContent = 'No browser voices loaded yet.'
+        return
+      }
+
+      const defaultOption = document.createElement('option')
+      defaultOption.value = ''
+      defaultOption.textContent = 'System default voice'
+      ttsVoiceSelect.appendChild(defaultOption)
+
+      for (const voice of voices) {
+        const option = document.createElement('option')
+        const natural = voice.name.toLowerCase().includes('natural') ? ' · Natural' : ''
+        option.value = voice.voiceURI
+        option.textContent = `${voice.name}${natural} (${voice.lang})`
+        ttsVoiceSelect.appendChild(option)
+      }
+
+      ttsVoiceSelect.value = voices.some(v => v.voiceURI === selected) ? selected : ''
+      ttsStatusEl.textContent = `${voices.length} voices available. Microsoft Natural voices appear first when available.`
+    },
+
+    setTtsPlaybackState(state: TtsPlaybackState) {
+      const speaking = state === 'speaking'
+      const paused = state === 'paused'
+      ttsPauseBtn.disabled = state === 'idle'
+      ttsStopBtn.disabled = state === 'idle'
+      ttsPauseBtn.textContent = paused ? 'Resume' : 'Pause'
+      ttsReadBtn.textContent = speaking || paused ? 'Restart chapter' : 'Read chapter'
+      ttsStatusEl.textContent = state === 'idle' ? 'Ready to read the current chapter.' : state === 'paused' ? 'Reading paused.' : 'Reading aloud.'
+    },
+
     destroy() {
       aiBtn.removeEventListener('click', handleAIToggle)
       backBtn.removeEventListener('click', handleBack)
@@ -281,11 +441,17 @@ function handleChapterNext(e: Event) {
       searchNextBtn.removeEventListener('click', () => callbacks.onSearchNext())
       searchCloseBtn.removeEventListener('click', handleSearchClose)
       searchInput.removeEventListener('keydown', handleSearchInputKeydown)
+      settingsCloseBtn.removeEventListener('click', closeSettingsOverlay)
+      ttsVoiceSelect.removeEventListener('change', handleTtsSettingsInput)
+      ttsRateInput.removeEventListener('input', handleTtsSettingsInput)
+      ttsPitchInput.removeEventListener('input', handleTtsSettingsInput)
+      ttsAutoReadInput.removeEventListener('change', handleTtsSettingsInput)
       document.removeEventListener('pointerdown', handleDocPointerdown)
       document.removeEventListener('keydown', handleDocKeydown)
       toolbarEl.remove()
       chapterOverlay.remove()
       searchOverlay.remove()
+      settingsOverlay.remove()
     },
   }
 }

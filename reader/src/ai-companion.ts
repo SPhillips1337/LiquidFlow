@@ -1,4 +1,4 @@
-import type { BookManifest } from './types'
+import type { BookManifest, TtsPlaybackState } from './types'
 import { ollamaChat, getDefaultModel } from './ai'
 
 const MAX_CHARS = 3500
@@ -8,6 +8,9 @@ export interface AICompanionCallbacks {
   getBookTitle(): string
   getBookAuthor(): string
   getChapterIndex(): number
+  onTtsRead(): void
+  onTtsPauseResume(): void
+  onTtsStop(): void
   onClose?: () => void
 }
 
@@ -35,12 +38,7 @@ export function createAICompanion(
         <button class="tb-btn ai-tts-toggle">🔊 Read Aloud</button>
         <button class="tb-btn ai-tts-stop hidden">⏹</button>
       </div>
-      <div class="ai-tts-speed">
-        <span class="ai-speed-min">0.5x</span>
-        <input type="range" class="ai-speed-slider" min="0.5" max="2" step="0.1" value="1" />
-        <span class="ai-speed-max">2x</span>
-        <span class="ai-speed-label">1.0x</span>
-      </div>
+      <div class="ai-tts-settings-note">Uses the voice, speed, and pitch from Reader Settings.</div>
     </div>
     <div class="ai-results"></div>
   `
@@ -51,46 +49,25 @@ export function createAICompanion(
   const actionBtns = panel.querySelectorAll<HTMLButtonElement>('.ai-action')
   const ttsToggle = panel.querySelector<HTMLButtonElement>('.ai-tts-toggle')!
   const ttsStop = panel.querySelector<HTMLButtonElement>('.ai-tts-stop')!
-  const speedSlider = panel.querySelector<HTMLInputElement>('.ai-speed-slider')!
-  const speedLabel = panel.querySelector<HTMLElement>('.ai-speed-label')!
 
-  let isSpeaking = false
+  let ttsState: TtsPlaybackState = 'idle'
   let quizState: { questions: Array<{ q: string; a: string }>; current: number } | null = null
-  const synth = window.speechSynthesis
 
-  function stopSpeaking() {
-    synth.cancel()
-    isSpeaking = false
-    ttsToggle.textContent = '🔊 Read Aloud'
-    ttsStop.classList.add('hidden')
+  function setTtsPlaybackState(state: TtsPlaybackState) {
+    ttsState = state
+    ttsStop.classList.toggle('hidden', state === 'idle')
+    ttsToggle.textContent = state === 'paused' ? '▶ Resume' : state === 'speaking' ? '⏸ Pause' : '🔊 Read Aloud'
   }
 
   ttsToggle.addEventListener('click', () => {
-    if (isSpeaking) {
-      if (synth.speaking && !synth.paused) {
-        synth.pause()
-        ttsToggle.textContent = '▶ Resume'
-      } else if (synth.paused) {
-        synth.resume()
-        ttsToggle.textContent = '⏸ Pause'
-      }
+    if (ttsState !== 'idle') {
+      callbacks.onTtsPauseResume()
       return
     }
-    const text = callbacks.getChapterText()
-    if (!text) return
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = parseFloat(speedSlider.value)
-    utterance.onstart = () => { isSpeaking = true; ttsToggle.textContent = '⏸ Pause'; ttsStop.classList.remove('hidden') }
-    utterance.onend = () => stopSpeaking()
-    utterance.onerror = () => stopSpeaking()
-    synth.speak(utterance)
+    callbacks.onTtsRead()
   })
 
-  ttsStop.addEventListener('click', stopSpeaking)
-
-  speedSlider.addEventListener('input', () => {
-    speedLabel.textContent = `${parseFloat(speedSlider.value).toFixed(1)}x`
-  })
+  ttsStop.addEventListener('click', () => callbacks.onTtsStop())
 
   function escapeHtml(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -280,7 +257,8 @@ ${text}`)
     show() { panel.classList.remove('hidden') },
     hide() { panel.classList.add('hidden') },
     toggle() { panel.classList.toggle('hidden') },
-    destroy() { stopSpeaking(); panel.remove() },
+    setTtsPlaybackState,
+    destroy() { callbacks.onTtsStop(); panel.remove() },
     isVisible() { return !panel.classList.contains('hidden') }
   }
 }

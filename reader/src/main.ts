@@ -6,7 +6,8 @@ import type {
   TypographyConfig,
   SearchState,
   LayoutLine,
-  SelectionState
+  SelectionState,
+  TtsSettings
 } from './types'
 import { loadShelf, renderShelf } from './shelf'
 import { renderContinuous, renderScene, resizeCanvas } from './renderer'
@@ -23,11 +24,14 @@ import {
   loadFontSize,
   saveTheme,
   loadTheme,
-  DEFAULT_FONT_SIZE
+  DEFAULT_FONT_SIZE,
+  loadTtsSettings,
+  saveTtsSettings
 } from './persistence'
 import { renderTransition } from './transition'
 import { createAICompanion } from './ai-companion'
 import { ollamaChat, getDefaultModel } from './ai'
+import { TtsController } from './tts'
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const shelfView = document.getElementById('shelf')!
@@ -43,6 +47,10 @@ const progressFill = document.getElementById('progress-fill')!
 const animationDriver = new AnimationDriver()
 const layoutCache = new LayoutCache()
 const CONTINUOUS_SCROLL = true
+const ttsController = new TtsController((state) => {
+  toolbar?.setTtsPlaybackState(state)
+  aiCompanion?.setTtsPlaybackState(state)
+})
 
 // ── App State ─────────────────────────────────────────────────────────────────
 let manifest: BookManifest | null = null
@@ -50,6 +58,8 @@ let position: ReadingPosition | null = null
 let config: TypographyConfig = makeTypographyConfig(loadFontSize(), window.innerWidth, loadTheme())
 let searchState: SearchState = emptySearchState()
 let selection: SelectionState | null = null
+let ttsSettings: TtsSettings = loadTtsSettings()
+let detachTtsVoices: (() => void) | null = null
 let mouseX = 0
 let mouseY = 0
 
@@ -105,7 +115,6 @@ function openBook(book: BookManifest) {
     onFontDecrease: () => updateFontSize(config.fontSize - 2),
     onFontReset: () => updateFontSize(DEFAULT_FONT_SIZE),
     onThemeToggle: toggleTheme,
-    onSettingsClick: () => alert('Settings menu coming soon! Use the toggle for now.'),
     onSearchSubmit: handleSearch,
     onSearchNext: () => { searchState = nextMatch(searchState); jumpToMatch(); },
     onSearchPrev: () => { searchState = prevMatch(searchState); jumpToMatch(); },
@@ -118,12 +127,20 @@ function openBook(book: BookManifest) {
     },
     onChapterSelect: (idx) => jumpToChapter(idx),
     onChapterNext: nextChapter,
-    onChapterPrev: prevChapter
+    onChapterPrev: prevChapter,
+    onTtsSettingsChange: updateTtsSettings,
+    onTtsRead: readCurrentChapterAloud,
+    onTtsPauseResume: () => ttsController.togglePause(),
+    onTtsStop: () => ttsController.stop()
   })
   toolbar.setFontSize(config.fontSize, 12, 48)
   toolbar.setTheme(config.theme)
   toolbar.setChapterTitle(book.chapters[position.chapterIndex].title)
   toolbar.setChapterNav(position.chapterIndex > 0, position.chapterIndex < book.chapters.length - 1)
+  toolbar.setTtsSettings(ttsSettings)
+  toolbar.setTtsPlaybackState('idle')
+  refreshTtsVoices()
+  detachTtsVoices = ttsController.onVoicesChanged(refreshTtsVoices)
 
   // Create AI Companion panel
   aiCompanion = createAICompanion(readerView, book, {
@@ -131,8 +148,13 @@ function openBook(book: BookManifest) {
     getBookTitle: () => book.title,
     getBookAuthor: () => book.author,
     getChapterIndex: () => position?.chapterIndex ?? 0,
+    onTtsRead: readCurrentChapterAloud,
+    onTtsPauseResume: () => ttsController.togglePause(),
+    onTtsStop: () => ttsController.stop(),
     onClose: () => initChapterNav()
   })
+  aiCompanion.setTtsPlaybackState('idle')
+  if (ttsSettings.autoRead) readCurrentChapterAloud()
 
   // Sync body class for UI theme
   document.body.setAttribute('data-theme', config.theme)
@@ -160,8 +182,24 @@ function getChapterText(): string {
   return ch.scenes.map(s => s.text).join('\n\n')
 }
 
+function updateTtsSettings(next: TtsSettings) {
+  ttsSettings = next
+  saveTtsSettings(ttsSettings)
+}
+
+function refreshTtsVoices() {
+  toolbar?.setTtsVoices(ttsController.getVoices())
+  toolbar?.setTtsSettings(ttsSettings)
+}
+
+function readCurrentChapterAloud() {
+  ttsController.speak(getChapterText(), ttsSettings)
+}
+
 function closeBook() {
   cancelAnimationFrame(rafId)
+  ttsController.stop()
+  if (detachTtsVoices) detachTtsVoices()
   if (toolbar) toolbar.destroy()
   if (aiCompanion) aiCompanion.destroy()
   if (inputDetach) inputDetach()
@@ -171,6 +209,7 @@ function closeBook() {
   toolbar = null
   aiCompanion = null
   inputDetach = null
+  detachTtsVoices = null
 
   readerView.classList.remove('active')
   shelfView.classList.add('active')
@@ -306,6 +345,7 @@ function jumpToChapter(idx: number) {
     updateProgress()
     savePosition(position)
     dirty = true
+    if (ttsSettings.autoRead) readCurrentChapterAloud()
     return
   }
 
@@ -348,6 +388,7 @@ function onSceneChanged() {
     toolbar.setChapterNav(position.chapterIndex > 0, position.chapterIndex < (manifest?.chapters.length ?? 0) - 1)
   }
   dirty = true
+  if (ttsSettings.autoRead) readCurrentChapterAloud()
 }
 
 function updateChapterNavHighlight() {

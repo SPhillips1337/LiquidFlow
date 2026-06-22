@@ -520,8 +520,8 @@ html, body {
   letter-spacing: 0.05em;
 }
 
-/* ── Overlays (Chapters & Search) ── */
-.chapter-list-overlay, .search-overlay {
+/* ── Overlays (Chapters, Search & Settings) ── */
+.chapter-list-overlay, .search-overlay, .settings-overlay {
   position: absolute;
   top: 64px;
   left: 0; right: 0; bottom: 0;
@@ -533,7 +533,7 @@ html, body {
   padding: 40px;
   align-items: center;
 }
-.chapter-list-overlay.hidden, .search-overlay.hidden { display: none; }
+.chapter-list-overlay.hidden, .search-overlay.hidden, .settings-overlay.hidden { display: none; }
 
 .chapter-list-inner {
   width: 100%;
@@ -580,6 +580,82 @@ html, body {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--accent);
+}
+
+.settings-panel {
+  width: min(100%, 560px);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.settings-header h2 {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.settings-fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.settings-fieldset legend {
+  padding: 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.settings-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+.settings-field select {
+  min-height: 44px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  padding: 8px 10px;
+}
+.settings-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.settings-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 2px 0 16px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.settings-check input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tts-status {
+  min-height: 1.2em;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* ── Canvas Stack ── */
@@ -903,25 +979,12 @@ html, body {
   min-height: 34px;
   padding: 6px 12px;
 }
-.ai-tts-speed {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.ai-tts-settings-note {
   margin-top: 8px;
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--text-muted);
-}
-.ai-speed-slider {
-  flex: 1;
-  accent-color: var(--accent);
-  height: 4px;
-  cursor: pointer;
-}
-.ai-speed-label {
-  min-width: 32px;
-  text-align: right;
-  color: var(--text-secondary);
+  line-height: 1.4;
 }
 
 .ai-results {

@@ -1,4 +1,4 @@
-import type { ReadingPosition } from './types'
+import type { ReadingPosition, TtsSettings } from './types'
 
 // Per-bookId debounce timers so different books don't interfere
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -45,4 +45,37 @@ export function loadTheme(): 'dark' | 'light' | 'sepia' {
   const raw = localStorage.getItem('liquidflow.theme')
   if (raw === 'dark' || raw === 'light' || raw === 'sepia') return raw
   return 'dark'
+}
+
+export const DEFAULT_TTS_SETTINGS: TtsSettings = {
+  voiceURI: '',
+  rate: 1,
+  pitch: 1,
+  autoRead: false
+}
+
+function clamp(n: unknown, min: number, max: number, fallback: number): number {
+  const parsed = Number(n)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(max, parsed))
+}
+
+export function saveTtsSettings(settings: TtsSettings): void {
+  localStorage.setItem('liquidflow.tts', JSON.stringify(settings))
+}
+
+export function loadTtsSettings(): TtsSettings {
+  try {
+    const raw = localStorage.getItem('liquidflow.tts')
+    if (raw === null) return DEFAULT_TTS_SETTINGS
+    const parsed = JSON.parse(raw) as Partial<TtsSettings>
+    return {
+      voiceURI: typeof parsed.voiceURI === 'string' ? parsed.voiceURI : '',
+      rate: clamp(parsed.rate, 0.5, 2, DEFAULT_TTS_SETTINGS.rate),
+      pitch: clamp(parsed.pitch, 0.5, 2, DEFAULT_TTS_SETTINGS.pitch),
+      autoRead: parsed.autoRead === true
+    }
+  } catch {
+    return DEFAULT_TTS_SETTINGS
+  }
 }

@@ -144,6 +144,23 @@ export interface SearchState {
   currentIndex: number
 }
 
+export interface TtsSettings {
+  voiceURI: string
+  rate: number
+  pitch: number
+  autoRead: boolean
+}
+
+export interface TtsVoiceOption {
+  voiceURI: string
+  name: string
+  lang: string
+  localService: boolean
+  isDefault: boolean
+}
+
+export type TtsPlaybackState = 'idle' | 'speaking' | 'paused'
+
 // Persisted reading position
 export interface ReadingPosition {
   bookId: string
