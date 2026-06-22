@@ -9,7 +9,7 @@ import type {
   SelectionState
 } from './types'
 import { loadShelf, renderShelf } from './shelf'
-import { renderScene, resizeCanvas } from './renderer'
+import { renderContinuous, renderScene, resizeCanvas } from './renderer'
 import { AnimationDriver } from './animation-driver'
 import { LayoutCache, makeTypographyConfig } from './layout-cache'
 import { createToolbar } from './toolbar'
@@ -42,6 +42,7 @@ const progressFill = document.getElementById('progress-fill')!
 // ── Core Engines ──────────────────────────────────────────────────────────────
 const animationDriver = new AnimationDriver()
 const layoutCache = new LayoutCache()
+const CONTINUOUS_SCROLL = true
 
 // ── App State ─────────────────────────────────────────────────────────────────
 let manifest: BookManifest | null = null
@@ -230,19 +231,32 @@ function startLoop() {
       const obstacles = animationDriver.getEntityObstacles()
       const currentMatch = searchState.matches.length > 0 ? searchState.matches[searchState.currentIndex] : null
 
-      currentLines = renderScene(
-        mainCanvas,
-        scene,
-        layoutCache,
-        obstacles,
-        currentMatch,
-        position.scrollOffset,
-        config,
-        selection,
-        manifest.entityManifest,
-        mouseX,
-        mouseY
-      )
+      currentLines = CONTINUOUS_SCROLL
+        ? renderContinuous(
+          mainCanvas,
+          manifest,
+          layoutCache,
+          position.scrollOffset,
+          config,
+          selection,
+          mouseX,
+          mouseY
+        )
+        : renderScene(
+          mainCanvas,
+          scene,
+          layoutCache,
+          obstacles,
+          currentMatch,
+          position.scrollOffset,
+          config,
+          selection,
+          manifest.entityManifest,
+          mouseX,
+          mouseY
+        )
+
+      if (CONTINUOUS_SCROLL) syncContinuousPositionFromScroll()
 
       updateSceneInfo()
       if (toolbar) toolbar.setProgress(calculateProgress())
@@ -284,6 +298,17 @@ function toggleTheme() {
 
 function jumpToChapter(idx: number) {
   if (!manifest || !position) return
+  if (CONTINUOUS_SCROLL && currentLines.length) {
+    position.chapterIndex = idx
+    position.sceneIndex = 0
+    position.scrollOffset = Math.max(0, getChapterTop(idx) - config.paddingTop)
+    syncContinuousPositionFromScroll()
+    updateProgress()
+    savePosition(position)
+    dirty = true
+    return
+  }
+
   position.chapterIndex = idx
   position.sceneIndex = 0
   position.scrollOffset = 0
@@ -293,6 +318,11 @@ function jumpToChapter(idx: number) {
 function jumpToMatch() {
   if (!manifest || !position || searchState.matches.length === 0) return
   const m = searchState.matches[searchState.currentIndex]
+  if (CONTINUOUS_SCROLL) {
+    jumpToChapter(m.chapterIndex)
+    return
+  }
+
   position.chapterIndex = m.chapterIndex
   position.sceneIndex = m.sceneIndex
   position.scrollOffset = 0 // ideal: scroll to match
@@ -336,8 +366,47 @@ function updateChapterNavHighlight() {
   })
 }
 
+function getContentHeight(): number {
+  const lastLine = currentLines[currentLines.length - 1]
+  return lastLine ? lastLine.y + config.lineHeight : 0
+}
+
+function getChapterTop(idx: number): number {
+  const heading = `Chapter ${idx + 1}:`
+  return currentLines.find(line => line.text.startsWith(heading))?.y ?? 0
+}
+
+function syncContinuousPositionFromScroll() {
+  if (!manifest || !position || !currentLines.length) return
+
+  let chapterIndex = 0
+  const markerY = position.scrollOffset + config.lineHeight
+  for (let i = 0; i < manifest.chapters.length; i++) {
+    if (getChapterTop(i) <= markerY) chapterIndex = i
+  }
+
+  if (chapterIndex !== position.chapterIndex || position.sceneIndex !== 0) {
+    position.chapterIndex = chapterIndex
+    position.sceneIndex = 0
+    if (toolbar) toolbar.setChapterTitle(manifest.chapters[chapterIndex].title)
+    updateChapterNavHighlight()
+    if (toolbar) {
+      toolbar.setChapterNav(chapterIndex > 0, chapterIndex < manifest.chapters.length - 1)
+    }
+  }
+}
+
 function updateProgress() {
   if (!manifest || !position) return
+  if (CONTINUOUS_SCROLL) {
+    const canvasHeight = mainCanvas.getBoundingClientRect().height
+    const maxScroll = Math.max(1, getContentHeight() - canvasHeight + config.paddingTop)
+    const fraction = Math.max(0, Math.min(1, position.scrollOffset / maxScroll))
+    progressFill.style.width = `${fraction * 100}%`
+    if (toolbar) toolbar.setProgress(fraction)
+    return
+  }
+
   const total = manifest.chapters.length
   const current = position.chapterIndex + (position.sceneIndex / manifest.chapters[position.chapterIndex].scenes.length)
   const fraction = current / total
@@ -355,6 +424,17 @@ function initScrubber() {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
     const fraction = x / rect.width
+
+    if (CONTINUOUS_SCROLL && position) {
+      const canvasHeight = mainCanvas.getBoundingClientRect().height
+      const maxScroll = Math.max(0, getContentHeight() - canvasHeight + config.paddingTop)
+      position.scrollOffset = Math.max(0, Math.min(maxScroll, fraction * maxScroll))
+      syncContinuousPositionFromScroll()
+      updateProgress()
+      dirty = true
+      savePosition(position)
+      return
+    }
 
     // Jump to chapter
     const totalChapters = manifest.chapters.length
@@ -397,8 +477,16 @@ function handleInput(e: InputEvent) {
     case 'scroll':
       position.scrollOffset = Math.max(0, position.scrollOffset + e.deltaY)
 
-      // Check for auto-chapter navigation at boundaries
-      checkAutoChapterNav()
+      if (CONTINUOUS_SCROLL) {
+        const canvasHeight = mainCanvas.getBoundingClientRect().height
+        const maxScroll = Math.max(0, getContentHeight() - canvasHeight + config.paddingTop)
+        position.scrollOffset = Math.min(position.scrollOffset, maxScroll)
+        syncContinuousPositionFromScroll()
+        updateProgress()
+      } else {
+        // Check for auto-chapter navigation at boundaries
+        checkAutoChapterNav()
+      }
 
       dirty = true
       savePosition(position)
@@ -621,20 +709,14 @@ function prevScene() {
 function nextChapter() {
   if (!manifest || !position) return
   if (position.chapterIndex < manifest.chapters.length - 1) {
-    position.chapterIndex++
-    position.sceneIndex = 0
-    position.scrollOffset = 0
-    onSceneChanged()
+    jumpToChapter(position.chapterIndex + 1)
   }
 }
 
 function prevChapter() {
   if (!manifest || !position) return
   if (position.chapterIndex > 0) {
-    position.chapterIndex--
-    position.sceneIndex = 0
-    position.scrollOffset = 0
-    onSceneChanged()
+    jumpToChapter(position.chapterIndex - 1)
   }
 }
 
@@ -649,11 +731,12 @@ function checkAutoChapterNav() {
   const now = Date.now()
   if (now - lastAutoNavTime < AUTO_NAV_COOLDOWN) return
 
-  const contentHeight = currentLines.length * config.lineHeight
+  const contentHeight = getContentHeight()
   const scrollY = position.scrollOffset
+  const bottomPadding = config.lineHeight * 6
 
   // At bottom of content - need extra padding before auto-advancing
-  if (scrollY > contentHeight + config.lineHeight) {
+  if (scrollY > contentHeight + bottomPadding) {
     console.log('[AutoNav] Bottom reached, going next')
     justNavigated = true
     lastAutoNavTime = now
@@ -673,6 +756,12 @@ function checkAutoChapterNav() {
 
 function calculateProgress(): number {
   if (!manifest || !position) return 0
+  if (CONTINUOUS_SCROLL) {
+    const canvasHeight = mainCanvas.getBoundingClientRect().height
+    const maxScroll = Math.max(1, getContentHeight() - canvasHeight + config.paddingTop)
+    return Math.max(0, Math.min(1, position.scrollOffset / maxScroll))
+  }
+
   const total = manifest.chapters.reduce((sum, ch) => sum + ch.scenes.length, 0)
   let done = 0
   for (let i = 0; i < position.chapterIndex; i++) done += manifest.chapters[i].scenes.length
@@ -682,6 +771,11 @@ function calculateProgress(): number {
 
 function updateSceneInfo() {
   if (!manifest || !position) return
+  if (CONTINUOUS_SCROLL) {
+    sceneInfoEl.textContent = `Chapter ${position.chapterIndex + 1} of ${manifest.chapters.length}`
+    return
+  }
+
   const ch = manifest.chapters[position.chapterIndex]
   sceneInfoEl.textContent = `Scene ${position.sceneIndex + 1} of ${ch.scenes.length}`
 }

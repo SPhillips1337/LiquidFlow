@@ -3,7 +3,7 @@
 
 import { prepareWithSegments, layoutNextLineRange, materializeLineRange } from '@chenglou/pretext'
 import type { LayoutCursor } from '@chenglou/pretext'
-import type { BookScene, LayoutLine, WordBound, TypographyConfig, AsciiAsset } from './types'
+import type { BookManifest, BookScene, LayoutLine, WordBound, TypographyConfig, AsciiAsset } from './types'
 import { LayoutCache } from './layout-cache'
 import { AsciiVisualizer } from './AsciiVisualizer'
 
@@ -251,6 +251,51 @@ export function renderScene(
   ctx.shadowBlur = 0
 
   return lines
+}
+
+export function renderContinuous(
+  canvas: HTMLCanvasElement,
+  book: BookManifest,
+  layoutCache: LayoutCache,
+  scrollOffset: number,
+  config: TypographyConfig,
+  selection: { startLine: number; startWordIdx: number; endLine: number; endWordIdx: number } | null,
+  mouseX?: number,
+  mouseY?: number
+): LayoutLine[] {
+  const text = book.chapters.map((chapter, idx) => {
+    const heading = `Chapter ${idx + 1}: ${chapter.title}`
+    const body = chapter.scenes.map(scene => scene.text).join('\n\n* * *\n\n')
+    return `${heading}\n\n${body}`
+  }).join('\n\n')
+
+  const continuousScene: BookScene = {
+    id: `${book.id}:continuous`,
+    text,
+    mood: 'neutral',
+    visualPrompt: '',
+    entities: [],
+    animationHints: {
+      mood: 'neutral',
+      visualPrompt: '',
+      entities: [],
+      transitionStyle: 'typographic-ascii'
+    }
+  }
+
+  return renderScene(
+    canvas,
+    continuousScene,
+    layoutCache,
+    [],
+    null,
+    scrollOffset,
+    config,
+    selection,
+    book.entityManifest,
+    mouseX,
+    mouseY
+  )
 }
 
 // ── Drawing helper ───────────────────────────────────────────────────────────
