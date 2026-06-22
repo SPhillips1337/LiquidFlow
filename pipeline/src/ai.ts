@@ -41,6 +41,9 @@ const OLLAMA_BASE = process.env['OLLAMA_BASE_URL'] ?? ''
 const AI_FORMAT   = (process.env['AI_FORMAT'] || 'ollama') as 'ollama' | 'openai'
 const FAST_MODEL  = process.env['OLLAMA_FAST_MODEL'] ?? 'granite4:3b'
 const MAIN_MODEL  = process.env['OLLAMA_MAIN_MODEL'] ?? 'llama3'
+const STORY_CHAPTER_COUNT = 6
+const STORY_CHAPTER_WORD_TARGET = '1600-2200'
+const STORY_CHAPTER_TOKEN_BUDGET = 6144
 
 if (!OLLAMA_BASE) {
   console.warn('[pipeline] OLLAMA_BASE_URL is not set. Configure it in pipeline/.env')
@@ -319,12 +322,13 @@ Respond with ONLY valid JSON:
 
 export async function generateOutline(
   bible: StoryBible,
-  chapterCount = 4
+  chapterCount = STORY_CHAPTER_COUNT
 ): Promise<ChapterOutline[]> {
   const raw = await requestAI(FAST_MODEL, [
     {
       role: 'user',
       content: `Write a ${chapterCount}-chapter outline for this story. Respond with ONLY JSON array.
+Make it feel like a complete novella-length arc, not a synopsis: setup, escalation, reversal, discovery, confrontation, resolution.
 
 Bible: ${JSON.stringify(bible)}
 
@@ -353,7 +357,8 @@ export async function generateChapterBeats(
   const raw = await requestAI(FAST_MODEL, [
     {
       role: 'user',
-      content: `Break this chapter into 4-6 beats. JSON array only.
+      content: `Break this chapter into 7-9 scene-level beats. JSON array only.
+Each beat should be specific enough to support a full prose scene with sensory detail, emotional movement, and consequence.
 
 Bible: ${JSON.stringify(bible)}
 Chapter: ${JSON.stringify(outline)}
@@ -384,7 +389,9 @@ Beats: ${JSON.stringify(beats)}
 Previous chapter summary: ${previousSummary || 'None'}
 
 Write vivid original prose for this chapter.
-Target length: 900–1200 words.
+Target length: ${STORY_CHAPTER_WORD_TARGET} words.
+Write complete scenes rather than compressed summary. Include dialogue, concrete setting detail, interiority, and cause-and-effect transitions.
+Keep the chapter focused on the provided beats, but let important moments breathe.
 Use the chapter heading format exactly: "Chapter ${outline.number}: ${outline.title}"
 No meta commentary. End on a strong beat.`
 
@@ -394,14 +401,14 @@ No meta commentary. End on a strong beat.`
       content: 'You are a skilled fiction writer. Write original prose only.',
     },
     { role: 'user', content: context },
-  ], { num_predict: 3072 })
+  ], { num_predict: STORY_CHAPTER_TOKEN_BUDGET })
 }
 
 export async function summarizeChapter(text: string): Promise<string> {
   const raw = await requestAI(FAST_MODEL, [
     {
       role: 'user',
-      content: `Summarize this chapter in 2-3 sentences for continuity:\n${text.slice(0, 2000)}`,
+      content: `Summarize this chapter in 4-6 sentences for continuity. Track character decisions, secrets revealed, unresolved threats, and emotional state:\n${text.slice(0, 4000)}`,
     },
   ])
   return raw.trim()
@@ -414,10 +421,10 @@ export async function updateBibleAfterChapter(
   const raw = await requestAI(FAST_MODEL, [
     {
       role: 'user',
-      content: `Update this story bible with new threads or character changes from the chapter. Return full updated JSON bible.
+      content: `Update this story bible with new threads, character changes, relationship shifts, revealed secrets, and unresolved risks from the chapter. Return full updated JSON bible.
 
 Current bible: ${JSON.stringify(bible)}
-Chapter text (first 1500 chars): ${chapterText.slice(0, 1500)}`,
+Chapter text (first 3000 chars): ${chapterText.slice(0, 3000)}`,
     },
   ])
 
@@ -437,7 +444,7 @@ export async function generateCraftedStory(
   gutenbergRefs: any[] = []
 ): Promise<GeneratedStory> {
   const bible = await generateStoryBible(premise, genre, gutenbergRefs)
-  const outline = await generateOutline(bible, 4)
+  const outline = await generateOutline(bible, STORY_CHAPTER_COUNT)
 
   const chapters: string[] = []
   let previousSummary = ''
