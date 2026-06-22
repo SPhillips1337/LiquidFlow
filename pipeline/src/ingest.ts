@@ -4,23 +4,13 @@
 // e.g.:  npm run ingest -- time-machine
 //        npm run ingest -- frankenstein https://www.gutenberg.org/cache/epub/84/pg84.txt "Frankenstein" "Mary Shelley" 🧟
 
-import { writeFileSync, mkdirSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
+
 import {
   GUTENBERG_BOOKS,
   fetchGutenbergText,
   stripBoilerplate,
-  splitChapters,
-  splitScenes
 } from './gutenberg.js'
-import { annotateScene, generateEntityDescription } from './ai.js'
-import { convertToAscii, generateProceduralAscii } from './ascii.js'
-import { fetchAndConvert } from './image-fetcher.js'
-import type { BookManifest, BookChapter, BookScene, EntityEntry, AsciiAsset } from '../../reader/src/types.js'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const OUT_DIR = join(__dirname, '../../reader/public/books')
+import { processBookText } from './ingest-core.js'
 
 async function main() {
   const bookId = process.argv[2]
@@ -53,128 +43,15 @@ async function main() {
   const clean = stripBoilerplate(raw)
   console.log(`✂  Stripped boilerplate. ${Math.round(clean.length / 1024)}KB remaining.`)
 
-  // 3. Split chapters
-  const rawChapters = splitChapters(clean)
-  console.log(`📑 Found ${rawChapters.length} chapters.`)
-
-  // 4. Annotate scenes with AI
-  const chapters: BookChapter[] = []
-  let sceneCount = 0
-
-  for (const [ci, ch] of rawChapters.entries()) {
-    const scenes = splitScenes(ch.body)
-    console.log(`\n  Chapter ${ci + 1}: "${ch.title}" — ${scenes.length} scenes`)
-
-    const annotatedScenes: BookScene[] = []
-
-    for (const [si, sceneText] of scenes.entries()) {
-      process.stdout.write(`    Scene ${si + 1}/${scenes.length} annotating… `)
-      const annotation = await annotateScene(sceneText)
-      console.log(`[${annotation.mood} | ${annotation.transitionStyle}]`)
-
-      let illustration: AsciiAsset | undefined = undefined
-      
-      // First, try to load pre-generated image from temp folder
-      const tempImg = join(__dirname, `../temp/${bookId}-${ci}-${si}.png`)
-      try {
-        illustration = await convertToAscii(tempImg, 60)
-        console.log(`[🎨 ASCII from local image]`)
-      } catch {
-        // Second, try fetching from Unsplash/image API based on visualPrompt
-        const fetched = await fetchAndConvert(annotation.visualPrompt, 60)
-        if (fetched) {
-          illustration = fetched
-          console.log(`[🎨 ASCII from image search: ${annotation.visualPrompt}]`)
-        } else {
-          // Third, fallback to procedural based on mood
-          illustration = generateProceduralAscii(annotation.mood, meta.theme || 'dark')
-          console.log(`[🎨 ASCII procedural: ${annotation.mood}]`)
-        }
-      }
-
-      annotatedScenes.push({
-        id: `${bookId}-${ci}-${si}`,
-        text: sceneText,
-        mood: annotation.mood,
-        visualPrompt: annotation.visualPrompt,
-        entities: annotation.entities,
-        animationHints: annotation,
-        illustration
-      })
-      sceneCount++
-
-      // Small delay to avoid hammering Ollama
-      await new Promise(r => setTimeout(r, 100))
-    }
-
-    chapters.push({ title: ch.title, scenes: annotatedScenes })
-  }
-
-  // 5. Build Entity Manifest
-  console.log('\n👤 Building Entity Manifest…')
-  const entityManifest = await buildEntityManifest(chapters)
-  console.log(`   Found ${entityManifest.length} unique entities.`)
-
-  // 6. Write manifest
-  const manifest: BookManifest = {
-    id: bookId,
+  const { outPath, sceneCount } = await processBookText(bookId, {
     title: meta.title,
     author: meta.author,
     emoji: meta.emoji,
-    chapters,
-    entityManifest
-  }
-
-  mkdirSync(OUT_DIR, { recursive: true })
-  const outPath = join(OUT_DIR, `${bookId}.manifest.json`)
-  writeFileSync(outPath, JSON.stringify(manifest, null, 2), 'utf-8')
+    theme: meta.theme,
+  }, clean)
 
   console.log(`\n✅ Done! ${sceneCount} scenes written to:`)
   console.log(`   ${outPath}\n`)
-}
-
-async function buildEntityManifest(chapters: BookChapter[]): Promise<EntityEntry[]> {
-  const entityMap = new Map<string, { firstSeenScene: string; context: string }>()
-
-  // Collect all unique entities
-  for (const ch of chapters) {
-    for (const scene of ch.scenes) {
-      for (const ent of scene.entities) {
-        if (!entityMap.has(ent)) {
-          entityMap.set(ent, { 
-            firstSeenScene: scene.id,
-            context: scene.text
-          })
-        }
-      }
-    }
-  }
-
-  const manifest: EntityEntry[] = []
-  const entities = Array.from(entityMap.entries())
-
-  for (let i = 0; i < entities.length; i++) {
-    const [name, data] = entities[i]
-    process.stdout.write(`   [${i + 1}/${entities.length}] Describing ${name}… `)
-    
-    try {
-      const description = await generateEntityDescription(name, data.context)
-      manifest.push({
-        name,
-        type: 'character', // Defaulting to character for now, AI could determine this but keeping it simple
-        description,
-        firstSeenScene: data.firstSeenScene
-      })
-      console.log('done.')
-    } catch (e) {
-      console.log('failed (skipping).')
-    }
-
-    // Small delay
-    await new Promise(r => setTimeout(r, 200))
-  }
-
-  return manifest
 }
 
 main().catch(err => {

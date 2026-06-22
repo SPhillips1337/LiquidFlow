@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "ingest": "tsx src/ingest.ts",
+    "create-story": "tsx src/create-story.ts",
     "test": "vitest --run"
   },
   "dependencies": {

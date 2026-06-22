@@ -1,5 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { unlinkSync, readdirSync } from 'fs'
 import { join } from 'path'
 
@@ -50,6 +50,46 @@ export default defineConfig(({ mode }) => {
               res.statusCode = 502
               res.end(JSON.stringify({ error: e.message }))
             }
+            return
+          }
+
+          // ── Create story from premise (Ollama) ──
+          if (req.url?.startsWith('/api/books/create-story') && req.method === 'POST') {
+            let body = ''
+            req.on('data', (chunk: string) => (body += chunk))
+            req.on('end', () => {
+              try {
+                const { premise, genre } = JSON.parse(body)
+                if (!premise?.trim()) {
+                  res.statusCode = 400
+                  res.end(JSON.stringify({ error: 'Missing premise' }))
+                  return
+                }
+                const normalizedPremise = premise.replace(/\s+/g, ' ').trim()
+                const normalizedGenre = String(genre || 'Fiction').replace(/\s+/g, ' ').trim()
+                console.log(`[CreateStory] Starting: ${normalizedPremise.slice(0, 80)}…`)
+                const pipelinePath = join(process.cwd(), '../pipeline')
+                execFile(
+                  'npm',
+                  ['run', 'create-story', '--', normalizedPremise, normalizedGenre],
+                  { cwd: pipelinePath, timeout: 900000, maxBuffer: 20 * 1024 * 1024 },
+                  (err, stdout, stderr) => {
+                    if (err) {
+                      console.error(`[CreateStory] Failed: ${err.message}`)
+                      res.statusCode = 500
+                      res.end(JSON.stringify({ error: err.message, stderr: stderr?.slice(-2000) }))
+                    } else {
+                      console.log(`[CreateStory] Success:\n${stdout}`)
+                      res.setHeader('Content-Type', 'application/json')
+                      res.end(JSON.stringify({ success: true, log: stdout.slice(-1500) }))
+                    }
+                  }
+                )
+              } catch (e: any) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: e.message }))
+              }
+            })
             return
           }
 

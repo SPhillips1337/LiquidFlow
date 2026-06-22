@@ -122,6 +122,54 @@ export function renderShelf(
     if (searchInput.value.trim()) doSearch(1)
   })
 
+  // ── Create a story (local Ollama) ──
+  const createSection = document.createElement('div')
+  createSection.className = 'shelf-create-story'
+  createSection.innerHTML = `
+    <div class="library-header">— Create a story —</div>
+    <p class="shelf-create-hint">Describe what you want; Ollama writes a short story, then the pipeline adds moods &amp; ASCII scenes.</p>
+    <textarea class="create-premise-input" rows="3" placeholder="e.g. A cozy mystery in a seaside bookshop where the cat solves crimes…"></textarea>
+    <div class="shelf-search-row">
+      <select class="create-genre-select">
+        ${GENRES.filter(g => g !== 'All' && !['Poetry', 'Philosophy', 'History', 'Science', 'Religion'].includes(g)).map(g => `<option value="${g}">${g}</option>`).join('')}
+      </select>
+      <button type="button" class="tb-btn create-story-btn">Create story</button>
+    </div>
+    <div class="create-story-status"></div>
+  `
+  grid.appendChild(createSection)
+
+  const premiseInput = createSection.querySelector<HTMLTextAreaElement>('.create-premise-input')!
+  const createGenre = createSection.querySelector<HTMLSelectElement>('.create-genre-select')!
+  const createBtn = createSection.querySelector<HTMLButtonElement>('.create-story-btn')!
+  const createStatus = createSection.querySelector<HTMLElement>('.create-story-status')!
+
+  createBtn.addEventListener('click', async () => {
+    const premise = premiseInput.value.trim()
+    if (!premise) {
+      createStatus.innerHTML = '<span class="ingest-error">Enter a premise first.</span>'
+      return
+    }
+    createBtn.disabled = true
+    createBtn.textContent = 'Creating…'
+    createStatus.innerHTML = '<span class="ingest-status">✍️ Generating fiction on Ollama, then annotating scenes — several minutes…</span>'
+    try {
+      const resp = await fetch('/api/books/create-story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ premise, genre: createGenre.value }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error || 'Create failed')
+      createStatus.innerHTML = '<span class="ingest-success">✅ Story ready! Reloading library…</span>'
+      setTimeout(() => window.location.reload(), 1500)
+    } catch (e: any) {
+      createBtn.disabled = false
+      createBtn.textContent = 'Create story'
+      createStatus.innerHTML = `<span class="ingest-error">⚠️ ${escHtml(e.message)}</span>`
+    }
+  })
+
   // ── Library header ──
   const libraryHeader = document.createElement('div')
   libraryHeader.className = 'library-header'

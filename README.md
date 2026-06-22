@@ -68,6 +68,19 @@ The application will be available at `http://localhost:5173`.
 
 LiquidFlow uses a custom pipeline to convert source texts (like Project Gutenberg) into rich JSON manifests.
 
+### Create an original story (Ollama)
+
+On the library shelf, use **Create a story**, or:
+
+```bash
+cd pipeline
+npm run create-story -- "Your premise here" "Mystery"
+```
+
+Uses `OLLAMA_MAIN_MODEL` (see `.env`) to draft 3–5 chapters, then annotates scenes for the reader.
+
+### Ingesting from Gutenberg
+
 To ingest a book, place the source file in `pipeline/temp/` (optional for images) and run:
 
 ```bash
