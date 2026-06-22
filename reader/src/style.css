@@ -638,6 +638,7 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  min-width: 0;
 }
 .settings-fieldset legend {
   padding: 0 8px;
@@ -661,6 +662,8 @@ html, body {
   font-family: var(--font-body);
   font-size: 1rem;
   padding: 8px 10px;
+  width: 100%;
+  max-width: 100%;
 }
 .settings-field input[type="range"] {
   width: 100%;
