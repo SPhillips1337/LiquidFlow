@@ -11,17 +11,24 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: { 
-      port: 5173,
+      host: true,
+      allowedHosts: ['liquidflow.happymonkey.ai'],
+      port: Number(process.env.LIQUIDFLOW_PORT || 9325),
       proxy: {
         '/api/ollama': {
           target: ollamaBase,
           changeOrigin: true,
           secure: false,
-          proxyTimeout: 60000,
-          timeout: 60000,
+          proxyTimeout: 600000,
+          timeout: 600000,
           rewrite: (path) => path.replace(/^\/api\/ollama/, '')
         }
       }
+    },
+    preview: {
+      host: true,
+      allowedHosts: ['liquidflow.happymonkey.ai'],
+      port: Number(process.env.LIQUIDFLOW_PORT || 9325),
     },
   plugins: [
     {

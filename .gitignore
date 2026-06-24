@@ -6,6 +6,8 @@ node_modules/
 # Build output
 dist/
 build/
+.next/
+web/.next/
 
 # Processed book manifests (large generated files — run pipeline to regenerate)
 reader/public/books/*.manifest.json
@@ -18,6 +20,8 @@ reader/.env
 reader/.env.local
 pipeline/.env
 pipeline/.env.local
+web/.env
+web/.env.local
 
 # Logs
 npm-debug.log*

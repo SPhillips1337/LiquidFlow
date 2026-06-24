@@ -6,6 +6,8 @@
   "scripts": {
     "dev":    "npm run dev    --workspace=reader",
     "build":  "npm run build  --workspace=reader",
-    "ingest": "npm run ingest --workspace=pipeline --"
+    "ingest": "npm run ingest --workspace=pipeline --",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop liquidflow"
   }
 }

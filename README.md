@@ -58,7 +58,34 @@ Start the development server:
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173`.
+**Web access**
+
+| Where | URL |
+|--------|-----|
+| This machine | http://127.0.0.1:9325 |
+| LAN | http://192.168.1.10:9325 (use this host’s IP if different) |
+
+Run in the background (same URLs after reboot if you use `pm2 startup`):
+
+```bash
+npm run pm2:start
+```
+
+**Public HTTPS:** optional nginx reverse proxy — `deploy/nginx-liquidflow.conf` (e.g. `liquidflow.a2m.one` → port 9325). Use long proxy timeouts for **Create story**.
+
+The app listens on port **9325** by default (`LIQUIDFLOW_PORT` to override).
+
+### Production Web App
+
+The multi-user SaaS shell lives in `web/` and runs as a Next.js app behind nginx:
+
+```bash
+cd web
+npm run build
+pm2 restart liquidflow-web --update-env
+```
+
+Production deployment, Auth.js, GitHub OAuth, and Prisma/Postgres setup are documented in `docs/PRODUCTION.md`.
 
 ---
 
