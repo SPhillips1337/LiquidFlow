@@ -75,9 +75,22 @@ let rafId = 0
 async function init() {
   document.body.setAttribute('data-theme', config.theme)
 
+  const accountBook = await loadAccountBookFromUrl()
+  if (accountBook) {
+    config = makeTypographyConfig(config.fontSize, window.innerWidth, 'dark')
+    document.body.setAttribute('data-theme', config.theme)
+    document.body.classList.add('production-reader')
+    openBook(accountBook, { returnToBookshelf: true })
+    initGlobalResize()
+    return
+  }
+
   const books = await loadShelf()
   renderShelf(books, bookGrid, openBook)
+  initGlobalResize()
+}
 
+function initGlobalResize() {
   // Handle global resize
   window.addEventListener('resize', () => {
     if (!manifest) return
@@ -90,7 +103,45 @@ async function init() {
   })
 }
 
-function openBook(book: BookManifest) {
+async function loadAccountBookFromUrl(): Promise<BookManifest | null> {
+  const bookId = new URLSearchParams(window.location.search).get('book')
+  if (!bookId) return null
+
+  try {
+    const resp = await fetch(`/api/books/${encodeURIComponent(bookId)}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+    if (!resp.ok) throw new Error(`Could not load book (${resp.status})`)
+
+    const data = await resp.json() as { book?: { manifest?: BookManifest } }
+    if (!data.book?.manifest) throw new Error('Book manifest missing')
+    return data.book.manifest
+  } catch (err) {
+    shelfView.classList.add('active')
+    bookGrid.innerHTML = `
+      <section class="reader-error-panel">
+        <p class="eyebrow">Reader</p>
+        <h1>Book unavailable</h1>
+        <p>${err instanceof Error ? escHtml(err.message) : 'Could not load this book.'}</p>
+        <a href="/bookshelf" class="reader-return-link">Back to bookshelf</a>
+      </section>
+    `
+    return null
+  }
+}
+
+function escHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] || char))
+}
+
+function openBook(book: BookManifest, options: { returnToBookshelf?: boolean } = {}) {
   manifest = book
 
   // Load or init position
@@ -112,7 +163,7 @@ function openBook(book: BookManifest) {
 
   // Create toolbar
   toolbar = createToolbar(readerView, book, {
-    onBack: closeBook,
+    onBack: options.returnToBookshelf ? returnToBookshelf : closeBook,
     onFontIncrease: () => updateFontSize(config.fontSize + 2),
     onFontDecrease: () => updateFontSize(config.fontSize - 2),
     onFontReset: () => updateFontSize(DEFAULT_FONT_SIZE),
@@ -176,6 +227,10 @@ function openBook(book: BookManifest) {
 
   dirty = true
   startLoop()
+}
+
+function returnToBookshelf() {
+  window.location.href = '/bookshelf'
 }
 
 function getChapterText(): string {

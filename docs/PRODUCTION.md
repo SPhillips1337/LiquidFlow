@@ -87,10 +87,30 @@ User, Account, Session, VerificationToken, Book, Subscription, UsageLog
 ## Deploy
 
 ```bash
+cd reader
+npm run build
+
 cd web
 npm run build
 pm2 restart liquidflow-web --update-env
 ```
+
+The production site is split between the Next.js app and the built Vite reader:
+
+- `/` - public landing page or authenticated dashboard.
+- `/bookshelf` - production bookshelf and account-scoped book list.
+- `/bookshelf/create` - authenticated AI story creation.
+- `/bookshelf/import` - authenticated Project Gutenberg import.
+- `/reader/` - built canvas reader. Production links should include `?book=<Book.id>` so the reader opens the selected book directly.
+
+OpenRouter is required for AI story creation:
+
+```env
+OPENROUTER_API_KEY="..."
+FREE_MODELS="nvidia/nemotron-3-super-120b-a12b:free"
+```
+
+Rotate the OpenRouter key if it has been shared in chat, logs, screenshots, or terminals.
 
 Verify auth:
 
@@ -103,6 +123,14 @@ Expected:
 
 - `/api/auth/providers` includes `github`.
 - `/api/auth/session` returns `null` before sign-in and user session JSON after sign-in.
+
+Verify reader routing:
+
+```bash
+curl -skI https://liquidflow.happymonkey.ai/reader/
+```
+
+Expected: `HTTP/2 200` with `content-type: text/html`.
 
 ## Known Troubleshooting
 

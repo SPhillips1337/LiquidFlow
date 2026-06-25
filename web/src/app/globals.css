@@ -85,11 +85,18 @@ h1 {
   font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
 .button:hover {
   transform: translateY(-1px);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
 }
 
 .button-primary {
@@ -126,8 +133,112 @@ h1 {
   width: min(100% - 32px, 560px);
 }
 
+.form-shell {
+  width: min(100% - 32px, 780px);
+}
+
 .page-shell h1 {
   font-size: clamp(2rem, 6vw, 3.75rem);
+}
+
+.dashboard-shell {
+  width: min(100% - 32px, 1120px);
+}
+
+.dashboard-header,
+.page-header,
+.workflow-panel,
+.creation-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.dashboard-header,
+.page-header {
+  margin-bottom: 28px;
+}
+
+.dashboard-header h1,
+.page-header h1 {
+  margin-bottom: 12px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 32px 0;
+}
+
+.stat-card,
+.workflow-panel,
+.creation-panel,
+.empty-state {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(17, 20, 27, 0.82);
+}
+
+.stat-card {
+  min-height: 150px;
+  padding: 18px;
+}
+
+.stat-label {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.stat-card strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.stat-card p,
+.workflow-panel p,
+.creation-panel p,
+.empty-state p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.workflow-panel,
+.creation-panel {
+  padding: 22px;
+}
+
+.workflow-panel h2,
+.creation-panel h2,
+.empty-state h2 {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+}
+
+.creation-panel {
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.creation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.quota-note {
+  flex-basis: 100%;
+  margin-top: 0;
+  font-size: 0.9rem;
 }
 
 .muted,
@@ -159,7 +270,7 @@ h1 {
 
 .empty-state {
   margin-top: 24px;
-  color: var(--muted);
+  padding: 22px;
 }
 
 .manifest-details {
@@ -184,4 +295,141 @@ h1 {
 
 .back-link a {
   color: var(--accent-strong);
+}
+
+.flow-form,
+.search-results-panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(17, 20, 27, 0.82);
+}
+
+.flow-form {
+  padding: 24px;
+}
+
+.flow-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.flow-form legend {
+  margin-bottom: 18px;
+  color: var(--foreground);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.field-row {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.field-row label {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.field-row input,
+.field-row select,
+.field-row textarea {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--foreground);
+  background: rgba(8, 9, 12, 0.72);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.field-row textarea {
+  resize: vertical;
+}
+
+.field-row input:focus-visible,
+.field-row select:focus-visible,
+.field-row textarea:focus-visible,
+.button:focus-visible {
+  outline: 3px solid rgba(240, 201, 111, 0.7);
+  outline-offset: 2px;
+}
+
+.field-help,
+.form-status p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.form-status {
+  margin-top: 16px;
+}
+
+.form-error {
+  color: #ffb3a7 !important;
+}
+
+.search-results-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 14px;
+}
+
+.search-result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(8, 9, 12, 0.5);
+}
+
+.search-result-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 860px) {
+  .dashboard-header,
+  .page-header,
+  .workflow-panel,
+  .creation-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .creation-actions,
+  .workflow-panel .button,
+  .page-header .button,
+  .dashboard-header .button,
+  .search-result-card .button {
+    width: 100%;
+  }
+
+  .search-result-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-shell {
+    padding: 24px 16px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
