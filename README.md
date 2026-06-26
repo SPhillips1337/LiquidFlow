@@ -6,10 +6,10 @@ LiquidFlow is a premium, high-fidelity, canvas-first reading platform. It evolve
 
 - **Canvas Rendering Engine**: High-performance typography rendering using `@chenglou/pretext`.
 - **Animated ASCII Illustrations**: Procedural and image-based ASCII art that reacts to user interaction.
-- **AI Intelligence**: Integrated scholarly lookups via local Ollama models.
+- **AI Intelligence**: Integrated scholarly lookups via local Ollama models plus web story creation through OpenRouter.
 - **Dynamic Themes**: Dark, Light, and Sepia modes with curated color palettes.
 - **Interactive Scrubber**: Draggable progress bar for seamless chapter navigation.
-- **Library Management**: In-browser ability to delete and regenerate book manifests.
+- **Library Management**: Account-scoped bookshelf with reader launch, delete, and AI regeneration actions.
 - **Aesthetic UI**: Premium "Glassmorphic" interface with smooth micro-animations.
 
 ---
@@ -71,7 +71,7 @@ Run in the background (same URLs after reboot if you use `pm2 startup`):
 npm run pm2:start
 ```
 
-**Public HTTPS:** optional nginx reverse proxy — `deploy/nginx-liquidflow.conf` (e.g. `liquidflow.a2m.one` → port 9325). Use long proxy timeouts for **Create story**.
+**Public HTTPS:** use the production Next.js app behind nginx. The Vite reader dev server exposes local-only development middleware and should not be public.
 
 The app listens on port **9325** by default (`LIQUIDFLOW_PORT` to override).
 
@@ -95,9 +95,11 @@ Production deployment, Auth.js, GitHub OAuth, and Prisma/Postgres setup are docu
 
 LiquidFlow uses a custom pipeline to convert source texts (like Project Gutenberg) into rich JSON manifests.
 
-### Create an original story (Ollama)
+### Create an original story
 
-On the library shelf, use **Create a story**, or:
+In production, use **Create AI story** from `/bookshelf`. The web app creates a private first draft, extracts themes and motifs, searches Project Gutenberg/Gutendex for public-domain reference material, and expands the final reader-ready story through OpenRouter.
+
+For the legacy local pipeline CLI:
 
 ```bash
 cd pipeline
@@ -116,12 +118,13 @@ npm run ingest -- <book-id>
 
 Replace `<book-id>` with the name of the book you wish to process (e.g., `alice`, `moby-dick`).
 
-### Regenerating from Dashboard
+### Bookshelf actions
 
-You can regenerate any existing book's manifest directly from the Library Dashboard:
-1. Hover over a book card.
-2. Click the three-dot menu (⋮) in the top-right corner.
-3. Select **Regenerate**.
+Each production bookshelf card supports:
+
+1. **Open in Reader** - opens the book in the canvas reader.
+2. **Regenerate** - creates a new enriched AI version from the existing book text.
+3. **Delete** - removes the book from the current user's private bookshelf.
 
 ---
 

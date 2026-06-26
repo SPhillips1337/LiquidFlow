@@ -3,19 +3,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { reserveIngest } from '@/lib/quotas'
 import { plainTextToManifest, slugify } from '@/lib/bookManifest'
-import { boundedString, readJsonBody } from '@/lib/apiGuards'
 import { generateReferencedStory } from '@/lib/storyGeneration'
-
-const ALLOWED_GENRES = new Set([
-  'Fiction',
-  'Science Fiction',
-  'Fantasy',
-  'Mystery',
-  'Romance',
-  'Historical Fiction',
-  'Adventure',
-  'Horror',
-])
 
 async function userIsPaid(userId: string) {
   const user = await prisma.user.findUnique({
@@ -26,22 +14,41 @@ async function userIsPaid(userId: string) {
   return user?.subscription?.status === 'active' && ['paid_monthly', 'paid_yearly'].includes(user.subscription.tier)
 }
 
-export async function POST(req: NextRequest) {
+function extractBookText(manifest: unknown) {
+  const chapters = (manifest as { chapters?: Array<{ scenes?: Array<{ text?: unknown }> }> })?.chapters || []
+  return chapters
+    .flatMap((chapter) => chapter.scenes || [])
+    .map((scene) => String(scene.text || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
+    .slice(0, 9000)
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const parsed = await readJsonBody(req)
-    if (parsed.error) return parsed.error
+    const { id } = await params
+    const source = await prisma.book.findFirst({
+      where: {
+        id,
+        userId: session.user.id,
+      },
+    })
 
-    const premise = boundedString(parsed.body.premise, 1200)
-    const requestedGenre = boundedString(parsed.body.genre || 'Fiction', 80)
-    const genre = ALLOWED_GENRES.has(requestedGenre) ? requestedGenre : 'Fiction'
+    if (!source) {
+      return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+    }
 
-    if (premise.length < 8) {
-      return NextResponse.json({ error: 'Enter a longer premise first' }, { status: 400 })
+    const sourceText = extractBookText(source.manifest)
+    if (sourceText.split(/\s+/).filter(Boolean).length < 120) {
+      return NextResponse.json({ error: 'Book does not have enough text to regenerate' }, { status: 400 })
     }
 
     const allowed = await reserveIngest(session.user.id)
@@ -50,19 +57,25 @@ export async function POST(req: NextRequest) {
     }
 
     const isPaid = await userIsPaid(session.user.id)
+    const premise = [
+      `Regenerate and enrich this existing LiquidFlow book as a fresh original version.`,
+      `Keep the core appeal and genre implied by "${source.title}", but create a distinct new telling with richer structure, sharper conflict, and a complete ending.`,
+      `Source text:\n${sourceText}`,
+    ].join('\n\n')
+
     const { text, validationError } = await generateReferencedStory({
       userId: session.user.id,
       isPaid,
-      genre,
+      genre: 'Fiction',
       premise,
     })
 
     if (!text || validationError) {
-      return NextResponse.json({ error: validationError || 'Story generation returned no text' }, { status: 502 })
+      return NextResponse.json({ error: validationError || 'Regeneration returned no text' }, { status: 502 })
     }
 
     const firstLine = text.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '').trim()
-    const title = firstLine && firstLine.length <= 90 ? firstLine : `${genre} Story`
+    const title = firstLine && firstLine.length <= 90 ? firstLine : `${source.title} Reimagined`
     const slug = slugify(`${title}-${Date.now().toString(36)}`)
     const manifest = plainTextToManifest({
       id: slug,
@@ -79,9 +92,10 @@ export async function POST(req: NextRequest) {
         manifest,
       },
     })
+
     return NextResponse.json({ success: true, slug })
   } catch (err) {
-    console.error('[create-story] failed', err)
-    return NextResponse.json({ error: 'Story creation failed' }, { status: 500 })
+    console.error('[regenerate-book] failed', err)
+    return NextResponse.json({ error: 'Book regeneration failed' }, { status: 500 })
   }
 }

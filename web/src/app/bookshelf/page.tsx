@@ -1,6 +1,7 @@
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
+import { BookCardActions } from './BookCardActions'
 
 const FREE_LIMIT = parseInt(process.env.FREE_INGEST_LIMIT_PER_WEEK || '1', 10)
 
@@ -99,9 +100,12 @@ export default async function Bookshelf() {
               <h2>{book.title}</h2>
               <p className="meta">Slug: {book.slug}</p>
               <p className="meta">Added: {new Date(book.createdAt).toLocaleDateString()}</p>
-              <a href={getReaderUrl(book.id)} className="button button-primary compact">
-                Open in Reader
-              </a>
+              <div className="book-card-actions">
+                <a href={getReaderUrl(book.id)} className="button button-primary compact">
+                  Open in Reader
+                </a>
+                <BookCardActions bookId={book.id} title={book.title} />
+              </div>
               <details className="manifest-details">
                 <summary>Manifest preview</summary>
                 <pre>

@@ -4,8 +4,9 @@ import { recordUsage } from './quotas'
 const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY
 
-const FREE_MODELS = (process.env.FREE_MODELS || 'meta-llama/llama-3.1-8b-instruct,google/gemini-flash-1.5').split(',')
-const PAID_MODELS = (process.env.PAID_MODELS || 'anthropic/claude-3.5-sonnet,openai/gpt-4o').split(',')
+const DEFAULT_FREE_MODELS = 'nvidia/nemotron-3-super-120b-a12b:free'
+const FREE_MODELS = (process.env.FREE_MODELS || DEFAULT_FREE_MODELS).split(',')
+const PAID_MODELS = (process.env.PAID_MODELS || process.env.FREE_MODELS || DEFAULT_FREE_MODELS).split(',')
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'

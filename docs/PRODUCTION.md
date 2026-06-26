@@ -115,18 +115,32 @@ The production site is split between the Next.js app and the built Vite reader:
 - `/bookshelf/import` - authenticated Project Gutenberg import.
 - `/reader/` - built canvas reader. Production links should include `?book=<Book.id>` so the reader opens the selected book directly.
 
+Bookshelf cards expose account-scoped actions:
+
+- **Open in Reader** opens the selected book by database id.
+- **Regenerate** creates a new AI-generated version from the existing book text using the same story-generation pipeline and quota reservation path.
+- **Delete** removes the selected book from the current user's account only.
+
 OpenRouter is required for AI story creation:
 
 ```env
 OPENROUTER_API_KEY="..."
 FREE_MODELS="nvidia/nemotron-3-super-120b-a12b:free"
-PAID_MODELS="anthropic/claude-3.5-sonnet,openai/gpt-4o"
+PAID_MODELS="nvidia/nemotron-3-super-120b-a12b:free"
 ```
 
 Rotate the OpenRouter key if it has been shared in chat, logs, screenshots, or terminals.
 
-Story creation currently runs synchronously inside `/api/books/create-story`. The route validates generated
-text before saving:
+Story creation currently runs synchronously inside `/api/books/create-story`. Regeneration runs synchronously
+inside `/api/books/:id/regenerate`. Both use the shared story-generation pipeline:
+
+1. create a compact private first draft from the user premise or source book;
+2. extract themes, motifs, archetypes, and Gutendex search signals;
+3. search Project Gutenberg/Gutendex metadata for public-domain reference material;
+4. expand the final story using those references only for high-level motifs, atmosphere, archetypes, and structure;
+5. validate generated text before saving.
+
+Validation checks:
 
 - strips reasoning/model-note wrappers such as `<think>...</think>`;
 - rejects obvious model/task commentary;
@@ -163,3 +177,5 @@ Expected: `HTTP/2 200` with `content-type: text/html`.
 - `UntrustedHost`: set `AUTH_TRUST_HOST=true` and keep proxy headers in nginx.
 - `MissingSecret`: set `AUTH_SECRET`.
 - `error=Configuration` after GitHub callback: check PM2 logs. If Prisma reports missing `DATABASE_URL`, set it in `web/.env.local` and restart PM2 with `--update-env`.
+- OpenRouter `404` for a model: update `FREE_MODELS`/`PAID_MODELS` to currently available OpenRouter model ids. Paid users fall back to `PAID_MODELS`, then `FREE_MODELS`, then the tracked free default.
+- OpenRouter `402` for credits: use a free/cheaper model or reduce the story token ceilings before retrying.

@@ -110,6 +110,12 @@ h1 {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.button-danger {
+  border-color: rgba(255, 120, 120, 0.38);
+  color: #ffd7d7;
+  background: rgba(160, 40, 40, 0.18);
+}
+
 .button.compact {
   min-height: 36px;
   margin-top: 12px;
@@ -261,6 +267,25 @@ h1 {
 
 .book-card h2 {
   margin: 0 0 10px;
+}
+
+.book-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.book-card-actions .button.compact {
+  margin-top: 0;
+}
+
+.card-error {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  color: #ffb4b4;
+  font-size: 0.86rem;
 }
 
 .meta {
