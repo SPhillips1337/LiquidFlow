@@ -5,6 +5,20 @@ import { useRouter } from 'next/navigation'
 
 const GENRES = ['Fiction', 'Science Fiction', 'Fantasy', 'Mystery', 'Romance', 'Historical Fiction', 'Adventure', 'Horror']
 
+async function readResponse(resp: Response) {
+  const contentType = resp.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return resp.json()
+  }
+
+  const text = await resp.text()
+  return {
+    error: text.startsWith('<!DOCTYPE')
+      ? `Server returned an HTML error page (${resp.status}). The request may have timed out or crashed server-side.`
+      : text || `Request failed with status ${resp.status}`,
+  }
+}
+
 export function CreateStoryForm() {
   const router = useRouter()
   const [status, setStatus] = useState('')
@@ -35,7 +49,7 @@ export function CreateStoryForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ premise, genre }),
       })
-      const data = await resp.json()
+      const data = await readResponse(resp)
       if (!resp.ok) throw new Error(data.error || 'Story creation failed')
 
       setStatus('Story created. Returning to your bookshelf.')

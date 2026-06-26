@@ -48,8 +48,21 @@ function cleanGeneratedStory(raw: string) {
 
 function validateStoryText(text: string) {
   const opening = text.slice(0, 1400)
+  const words = text.split(/\s+/).filter(Boolean)
+  const ending = text.trim().slice(-1)
+  const chapterCount = (text.match(/^chapter\s+/gim) || []).length
+
   if (text.split(/\s+/).filter(Boolean).length < 250) {
     return 'The generated story was too short.'
+  }
+  if (words.length < 1200) {
+    return 'The generated story was shorter than the production minimum.'
+  }
+  if (chapterCount < 3) {
+    return 'The generated story did not include enough chapters.'
+  }
+  if (!/[.!?”"']/.test(ending)) {
+    return 'The generated story ended mid-sentence.'
   }
   if (META_PATTERNS.some((pattern) => pattern.test(opening))) {
     return 'The generated text included model notes instead of only story prose.'
@@ -67,74 +80,88 @@ async function generateStory(userId: string, isPaid: boolean, genre: string, pre
           'You are a fiction writer inside LiquidFlow.',
           'Return only the final story text.',
           'Do not include reasoning, analysis, task notes, safety notes, copyright commentary, markdown fences, or explanations.',
-          'The first non-empty line must be the story title. The rest must be prose for readers.',
+          'The first non-empty line must be the story title.',
+          'Then write exactly four chapters, each headed Chapter 1, Chapter 2, Chapter 3, and Chapter 4.',
+          'The story must have a complete ending and must not stop mid-sentence.',
         ].join(' '),
       },
       {
         role: 'user',
         content: retryText
-          ? `Rewrite this into only the final reader-facing story. Remove all reasoning, analysis, task commentary, policy notes, and prefaces.\n\n${retryText}`
-          : `Genre: ${genre}\nPremise: ${premise}\nLength: 1200-1800 words.\nOutput only the story.`,
+          ? `Rewrite this into a complete reader-facing story with exactly four concise chapters. Remove all reasoning, analysis, task commentary, policy notes, and prefaces. Finish the story with a complete ending.\n\n${retryText}`
+          : `Genre: ${genre}\nPremise: ${premise}\nLength: 1800-2600 words.\nOutput only the story.`,
       },
     ],
     isPaid,
-    2600,
+    4500,
   )
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await req.json()
-  const premise = String(body.premise || '').trim()
-  const genre = String(body.genre || 'Fiction').trim()
+    const body = await req.json()
+    const premise = String(body.premise || '').trim()
+    const genre = String(body.genre || 'Fiction').trim()
 
-  if (premise.length < 8) {
-    return NextResponse.json({ error: 'Enter a longer premise first' }, { status: 400 })
-  }
+    if (premise.length < 8) {
+      return NextResponse.json({ error: 'Enter a longer premise first' }, { status: 400 })
+    }
 
-  const allowed = await canIngest(session.user.id)
-  if (!allowed.allowed) {
-    return NextResponse.json({ error: allowed.reason || 'Quota exceeded' }, { status: 429 })
-  }
+    const allowed = await canIngest(session.user.id)
+    if (!allowed.allowed) {
+      return NextResponse.json({ error: allowed.reason || 'Quota exceeded' }, { status: 429 })
+    }
 
-  const isPaid = await userIsPaid(session.user.id)
-  let result = await generateStory(session.user.id, isPaid, genre, premise)
-  let text = cleanGeneratedStory(result.choices[0]?.message?.content || '')
-  let validationError = validateStoryText(text)
+    const isPaid = await userIsPaid(session.user.id)
+    let result = await generateStory(session.user.id, isPaid, genre, premise)
+    let text = cleanGeneratedStory(result.choices[0]?.message?.content || '')
+    let validationError = result.choices[0]?.finish_reason === 'length'
+      ? 'The model hit its output limit before finishing the story.'
+      : validateStoryText(text)
 
-  if (validationError) {
-    result = await generateStory(session.user.id, isPaid, genre, premise, result.choices[0]?.message?.content || '')
-    text = cleanGeneratedStory(result.choices[0]?.message?.content || '')
-    validationError = validateStoryText(text)
-  }
+    if (validationError) {
+      result = await generateStory(session.user.id, isPaid, genre, premise, result.choices[0]?.message?.content || '')
+      text = cleanGeneratedStory(result.choices[0]?.message?.content || '')
+      validationError = result.choices[0]?.finish_reason === 'length'
+        ? 'The model hit its output limit before finishing the story.'
+        : validateStoryText(text)
+    }
 
-  if (!text || validationError) {
-    return NextResponse.json({ error: validationError || 'Story generation returned no text' }, { status: 502 })
-  }
+    if (!text || validationError) {
+      return NextResponse.json({ error: validationError || 'Story generation returned no text' }, { status: 502 })
+    }
 
-  const firstLine = text.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '').trim()
-  const title = firstLine && firstLine.length <= 90 ? firstLine : `${genre} Story`
-  const slug = slugify(`${title}-${Date.now().toString(36)}`)
-  const manifest = plainTextToManifest({
-    id: slug,
-    title,
-    author: 'LiquidFlow AI',
-    text,
-  })
-
-  await prisma.book.create({
-    data: {
-      userId: session.user.id,
+    const firstLine = text.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '').trim()
+    const title = firstLine && firstLine.length <= 90 ? firstLine : `${genre} Story`
+    const slug = slugify(`${title}-${Date.now().toString(36)}`)
+    const manifest = plainTextToManifest({
+      id: slug,
       title,
-      slug,
-      manifest,
-    },
-  })
-  await recordUsage(session.user.id, 'ingest', result.model, result.usage?.total_tokens)
+      author: 'LiquidFlow AI',
+      text,
+    })
 
-  return NextResponse.json({ success: true, slug })
+    await prisma.book.create({
+      data: {
+        userId: session.user.id,
+        title,
+        slug,
+        manifest,
+      },
+    })
+    await recordUsage(session.user.id, 'ingest', result.model, result.usage?.total_tokens)
+
+    return NextResponse.json({ success: true, slug })
+  } catch (err) {
+    console.error('[create-story] failed', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Story creation failed' },
+      { status: 500 },
+    )
+  }
 }

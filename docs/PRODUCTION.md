@@ -112,6 +112,18 @@ FREE_MODELS="nvidia/nemotron-3-super-120b-a12b:free"
 
 Rotate the OpenRouter key if it has been shared in chat, logs, screenshots, or terminals.
 
+Story creation currently runs synchronously inside `/api/books/create-story`. The route validates generated
+text before saving:
+
+- strips reasoning/model-note wrappers such as `<think>...</think>`;
+- rejects obvious model/task commentary;
+- rejects output-limit finishes;
+- requires a multi-chapter story shape;
+- rejects mid-sentence endings.
+
+Long-running model calls can still fail at the HTTP/proxy layer. The next production step is to move creation
+and import work into a durable job table or queue with a status page.
+
 Verify auth:
 
 ```bash
