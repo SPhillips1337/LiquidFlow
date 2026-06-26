@@ -58,6 +58,9 @@ NEXTAUTH_URL="https://liquidflow.happymonkey.ai"
 AUTH_TRUST_HOST="true"
 GITHUB_CLIENT_ID="..."
 GITHUB_CLIENT_SECRET="..."
+OPENROUTER_API_KEY="..."
+FREE_INGEST_LIMIT_PER_WEEK=1
+PAID_INGEST_LIMIT_PER_WEEK=50
 ```
 
 GitHub OAuth App settings:
@@ -95,6 +98,15 @@ npm run build
 pm2 restart liquidflow-web --update-env
 ```
 
+The root PM2 config starts the same production Next.js process:
+
+```bash
+pm2 start /home/stephen/projects/LiquidFlow/ecosystem.config.cjs
+```
+
+Do not expose `reader`'s Vite dev server publicly. Its development middleware includes local-only ingestion,
+management, and Ollama proxy endpoints that are intentionally absent from the production Next.js app.
+
 The production site is split between the Next.js app and the built Vite reader:
 
 - `/` - public landing page or authenticated dashboard.
@@ -108,6 +120,7 @@ OpenRouter is required for AI story creation:
 ```env
 OPENROUTER_API_KEY="..."
 FREE_MODELS="nvidia/nemotron-3-super-120b-a12b:free"
+PAID_MODELS="anthropic/claude-3.5-sonnet,openai/gpt-4o"
 ```
 
 Rotate the OpenRouter key if it has been shared in chat, logs, screenshots, or terminals.

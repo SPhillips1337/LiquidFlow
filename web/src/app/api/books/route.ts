@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -23,29 +23,13 @@ export async function GET() {
   return NextResponse.json({ books })
 }
 
-// POST /api/books - create new book for current user (ingest manifest)
-export async function POST(req: NextRequest) {
+// POST /api/books intentionally disabled for public use. Creation must go
+// through validated Gutenberg import or story generation routes.
+export async function POST() {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const body = await req.json()
-  const { title, slug, manifest } = body
-
-  if (!title || !slug || !manifest) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-  }
-
-  // Enforce user isolation strictly
-  const book = await prisma.book.create({
-    data: {
-      userId: session.user.id,
-      title,
-      slug,
-      manifest,
-    },
-  })
-
-  return NextResponse.json({ book }, { status: 201 })
+  return NextResponse.json({ error: 'Use /api/books/ingest or /api/books/create-story' }, { status: 405 })
 }

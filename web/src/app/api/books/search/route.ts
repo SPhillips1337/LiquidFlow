@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
+import { boundedString } from '@/lib/apiGuards'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -8,9 +9,10 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const q = searchParams.get('q') || ''
-  const topic = searchParams.get('topic') || ''
-  const page = searchParams.get('page') || '1'
+  const q = boundedString(searchParams.get('q'), 120)
+  const topic = boundedString(searchParams.get('topic'), 80)
+  const requestedPage = Number(searchParams.get('page') || '1')
+  const page = String(Number.isInteger(requestedPage) ? Math.min(Math.max(requestedPage, 1), 20) : 1)
   const params = new URLSearchParams({ page })
 
   if (q) params.set('search', q)
@@ -19,6 +21,7 @@ export async function GET(req: NextRequest) {
   const resp = await fetch(`https://gutendex.com/books?${params.toString()}`, {
     headers: { Accept: 'application/json' },
     next: { revalidate: 300 },
+    signal: AbortSignal.timeout(10_000),
   })
 
   if (!resp.ok) {

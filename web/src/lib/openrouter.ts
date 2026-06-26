@@ -60,11 +60,13 @@ export async function chatCompletion(
       messages,
       max_tokens: maxTokens,
     }),
+    signal: AbortSignal.timeout(120_000),
   })
 
   if (!resp.ok) {
     const err = await resp.text()
-    throw new Error(`OpenRouter error ${resp.status}: ${err}`)
+    console.error(`[openrouter] ${resp.status}: ${err.slice(0, 500)}`)
+    throw new Error(`OpenRouter request failed (${resp.status})`)
   }
 
   const data: OpenRouterResponse = await resp.json()

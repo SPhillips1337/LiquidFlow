@@ -2,8 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { chatCompletion } from '@/lib/openrouter'
-import { canIngest, recordUsage } from '@/lib/quotas'
+import { reserveIngest } from '@/lib/quotas'
 import { plainTextToManifest, slugify } from '@/lib/bookManifest'
+import { boundedString, readJsonBody } from '@/lib/apiGuards'
+
+const ALLOWED_GENRES = new Set([
+  'Fiction',
+  'Science Fiction',
+  'Fantasy',
+  'Mystery',
+  'Romance',
+  'Historical Fiction',
+  'Adventure',
+  'Horror',
+])
 
 const META_PATTERNS = [
   /\b(as an ai|i am an ai|i can't|i cannot)\b/i,
@@ -104,15 +116,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await req.json()
-    const premise = String(body.premise || '').trim()
-    const genre = String(body.genre || 'Fiction').trim()
+    const parsed = await readJsonBody(req)
+    if (parsed.error) return parsed.error
+
+    const premise = boundedString(parsed.body.premise, 1200)
+    const requestedGenre = boundedString(parsed.body.genre || 'Fiction', 80)
+    const genre = ALLOWED_GENRES.has(requestedGenre) ? requestedGenre : 'Fiction'
 
     if (premise.length < 8) {
       return NextResponse.json({ error: 'Enter a longer premise first' }, { status: 400 })
     }
 
-    const allowed = await canIngest(session.user.id)
+    const allowed = await reserveIngest(session.user.id)
     if (!allowed.allowed) {
       return NextResponse.json({ error: allowed.reason || 'Quota exceeded' }, { status: 429 })
     }
@@ -154,14 +169,9 @@ export async function POST(req: NextRequest) {
         manifest,
       },
     })
-    await recordUsage(session.user.id, 'ingest', result.model, result.usage?.total_tokens)
-
     return NextResponse.json({ success: true, slug })
   } catch (err) {
     console.error('[create-story] failed', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Story creation failed' },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: 'Story creation failed' }, { status: 500 })
   }
 }

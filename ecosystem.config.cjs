@@ -1,14 +1,13 @@
-/** PM2: LAN + local web access (Vite dev = full API: ingest, create-story, lore) */
+/** PM2 production: public web app only. Do not expose the Vite reader dev server. */
 module.exports = {
   apps: [
     {
-      name: 'liquidflow',
-      cwd: '/home/stephen/projects/LiquidFlow/reader',
+      name: 'liquidflow-web',
+      cwd: '/home/stephen/projects/LiquidFlow/web',
       script: 'npm',
-      args: 'run dev',
+      args: 'run start -- -p 3000',
       env: {
-        LIQUIDFLOW_PORT: '9325',
-        NODE_ENV: 'development',
+        NODE_ENV: 'production',
       },
       max_memory_restart: '512M',
       autorestart: true,

@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { canIngest, recordUsage } from '../lib/quotas'
+import { reserveIngest } from '../lib/quotas'
 import { chatCompletion } from '../lib/openrouter'
 
 /**
@@ -22,6 +22,7 @@ export interface IngestionJob {
 }
 
 let jobs: IngestionJob[] = [] // in-memory for MVP; persist to DB in real impl
+let processing = false
 
 export async function enqueueIngestion(params: {
   userId: string
@@ -32,7 +33,7 @@ export async function enqueueIngestion(params: {
 }) {
   const { userId, title, slug, manifest, isPaid = false } = params
 
-  const allowed = await canIngest(userId)
+  const allowed = await reserveIngest(userId)
   if (!allowed.allowed) {
     throw new Error(allowed.reason || 'Quota exceeded')
   }
@@ -58,42 +59,46 @@ export async function enqueueIngestion(params: {
 }
 
 async function processQueue() {
-  // Sort: highest priority first, then FIFO
-  jobs.sort((a, b) => b.priority - a.priority || a.createdAt.getTime() - b.createdAt.getTime())
-
-  const next = jobs.find(j => j.status === 'pending')
-  if (!next) return
-
-  next.status = 'processing'
+  if (processing) return
+  processing = true
 
   try {
-    // Example: call OpenRouter for annotation (placeholder)
-    const result = await chatCompletion(
-      next.userId,
-      [{ role: 'user', content: `Summarize book: ${next.title}` }],
-      next.priority === 10
-    )
+    while (true) {
+      // Sort: highest priority first, then FIFO
+      jobs.sort((a, b) => b.priority - a.priority || a.createdAt.getTime() - b.createdAt.getTime())
 
-    // Persist book via existing ingest helper
-    await prisma.book.create({
-      data: {
-        userId: next.userId,
-        title: next.title,
-        slug: next.slug,
-        manifest: next.manifest || { summary: result.choices[0]?.message?.content },
-      },
-    })
+      const next = jobs.find(j => j.status === 'pending')
+      if (!next) return
 
-    await recordUsage(next.userId, 'ingest', result.model, result.usage?.total_tokens)
+      next.status = 'processing'
 
-    next.status = 'done'
-  } catch (err) {
-    next.status = 'failed'
-    console.error('[Queue] Job failed', err)
+      try {
+        // Example: call OpenRouter for annotation (placeholder)
+        const result = await chatCompletion(
+          next.userId,
+          [{ role: 'user', content: `Summarize book: ${next.title}` }],
+          next.priority === 10
+        )
+
+        // Persist book via existing ingest helper
+        await prisma.book.create({
+          data: {
+            userId: next.userId,
+            title: next.title,
+            slug: next.slug,
+            manifest: next.manifest || { summary: result.choices[0]?.message?.content },
+          },
+        })
+
+        next.status = 'done'
+      } catch (err) {
+        next.status = 'failed'
+        console.error('[Queue] Job failed', err)
+      }
+    }
+  } finally {
+    processing = false
   }
-
-  // Continue with next job
-  setImmediate(() => processQueue())
 }
 
 export function getQueueStatus() {

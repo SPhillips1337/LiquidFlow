@@ -1,6 +1,8 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 
 const FREE_LIMIT = parseInt(process.env.FREE_INGEST_LIMIT_PER_WEEK || '1', 10)
+const PAID_LIMIT = parseInt(process.env.PAID_INGEST_LIMIT_PER_WEEK || '50', 10)
 
 export interface UsageRecord {
   type: string
@@ -21,10 +23,6 @@ export async function canIngest(userId: string): Promise<{ allowed: boolean; rea
 
   const isPaid = user?.subscription?.status === 'active' && ['paid_monthly', 'paid_yearly'].includes(user.subscription.tier || '')
 
-  if (isPaid) {
-    return { allowed: true }
-  }
-
   // Free tier weekly limit (simple rolling window)
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
@@ -36,11 +34,50 @@ export async function canIngest(userId: string): Promise<{ allowed: boolean; rea
     },
   })
 
-  if (count >= FREE_LIMIT) {
-    return { allowed: false, reason: `Free tier limit reached (${FREE_LIMIT}/week)` }
+  const limit = isPaid ? PAID_LIMIT : FREE_LIMIT
+  if (count >= limit) {
+    return { allowed: false, reason: `${isPaid ? 'Paid' : 'Free'} tier limit reached (${limit}/week)` }
   }
 
   return { allowed: true }
+}
+
+/**
+ * Atomically reserve an ingestion slot before expensive work starts.
+ */
+export async function reserveIngest(userId: string): Promise<{ allowed: boolean; reason?: string }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { subscription: true },
+  })
+
+  const isPaid = user?.subscription?.status === 'active' && ['paid_monthly', 'paid_yearly'].includes(user.subscription.tier || '')
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const count = await tx.usageLog.count({
+        where: {
+          userId,
+          type: 'ingest',
+          createdAt: { gte: oneWeekAgo },
+        },
+      })
+
+      const limit = isPaid ? PAID_LIMIT : FREE_LIMIT
+      if (count >= limit) {
+        return { allowed: false, reason: `${isPaid ? 'Paid' : 'Free'} tier limit reached (${limit}/week)` }
+      }
+
+      await tx.usageLog.create({
+        data: { userId, type: 'ingest' },
+      })
+
+      return { allowed: true }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  } catch {
+    return { allowed: false, reason: 'Quota reservation failed. Try again.' }
+  }
 }
 
 /**
